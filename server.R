@@ -291,7 +291,7 @@ server <- function(input, output, session) {
         }, warning = function(w) {
           print(paste("Warning:  ", w))
         }, error = function(e) {
-          session$sendCustomMessage("handler_alert", paste("Error :  ", e, "Network node names must be a subset from the clustering file object names."))
+          session$sendCustomMessage("handler_alert", paste("Error :  ", e, "All objects contained in the clustering file must be present in the network."))
         }, finally = {})
         updateTabsetPanel(session, "cTabs",
                           selected = "Conductance Histogram"
