@@ -1,7 +1,7 @@
 # VICTOR
 VICTOR: A visual analytics web application for clustering comparison  
   
-With VICTOR one can:
+With VICTOR one can:  
 • Handle multiple clustering results simultaneously  
 • Apply thresholds on the cluster sizes  
 • Compare different clustering results using ten different comparison metrics.  
