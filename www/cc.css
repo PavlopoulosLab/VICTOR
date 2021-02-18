@@ -1,0 +1,221 @@
+body{
+  margin-bottom: 50px;
+}
+
+p {
+  display: inline-block;
+  width: 90%;
+  font-family: "Arial";
+  color: black;
+  line-height: 1.6;
+  text-align: justify;
+}
+  
+tr{
+  width: 100%;
+}
+
+th, td{
+  border: 1px solid lightgray;
+  padding: 4px;
+  text-align: center;
+  word-break: break-all;
+}
+
+canvas {
+  margin-top: 5px;
+  display: inline-block;
+}
+
+.heavy{
+  font-size: 20px;  
+}
+
+.footer{
+  position: fixed;
+  bottom: 0;
+  background-color: #1d9ce5;
+  z-index: 2;
+  height: 40px;
+  width: 100%;
+  margin-left: -15px;
+}
+
+.bold{
+  font-weight: bold;
+}
+
+.dataTable{
+  /*width: 100% !important;*/
+  border: 1px solid lightgray;
+  overflow-y: scroll;
+  max-height: 65vh; /* -> 50% window height*/
+  display: block;
+  margin-top: 10px;
+}
+
+.dataTable th:nth-child(1),td:nth-child(1),th:nth-child(3){
+  word-break: normal;
+}
+
+.dataTables_info{
+  margin-bottom: 100px;
+}
+
+.dt-buttons{
+  margin-left: 10px;
+}
+
+.nav{
+  margin-bottom: -1px;
+}
+
+.navbar-brand{
+  display: none;
+}
+
+.checkbox_element{
+  width: 25%;
+  word-wrap: break-word;
+}
+
+.checkbox_check{
+  width: 5%;
+}
+
+.fileControlButton{
+  margin: 10px;
+}
+
+.optionsBox{
+  width: 200px;
+  padding: 5px;
+}
+
+.span_sliderRange{
+  display: inline-block;
+  width: 50px;
+  text-align: center;
+  background-color: lightgray;
+  border: 1px solid black;
+  margin: 2px;
+  padding: 2px;
+}
+
+.controls_slider{
+  display: inline-block !important; 
+  width: 80% !important; 
+}
+
+.colorPicker{
+  margin-left: 7px;
+}
+
+.help_div{
+  width: 100%;
+  height: 70vh;
+  border: 1px solid lightgray;
+  margin-top: -1px;
+}
+
+#showFileDataOptions {
+  width: 100%;
+  background-color: aliceblue;
+  font-size: 16px;
+  margin-top: 10px;
+  padding: 2px;
+}
+
+#nodePlot{
+  margin-bottom: 100px;
+}
+
+#fileRemoveButton{
+  background-color: #c92424;
+  color: white;
+}
+
+#fileRemoveButton:hover{
+  background-color: #a61e1e;
+}
+
+#fileRemoveButton:active{
+  background-color: #eb3434;
+}
+
+#fileRenameButton{
+  background-color: #3dc229;
+  color: white;
+}
+
+#fileRenameButton:hover{
+  background-color: #30a11f;
+}
+
+#fileRenameButton:active{
+  background-color: #50db3b;
+}
+
+#results_IN{
+  width: 65vw;
+  height: 70vh;
+  margin-bottom: 100px;
+  border: 1px solid lightgray;
+}
+
+#results_IN_Layout, #results_condNetwork_Layout{
+  width: 100%;
+  height: 65vh;
+  margin-bottom: 100px;
+  border: 1px solid lightgray;
+}
+
+#results_SP{
+  width: 65vw;
+  height: 70vh;
+  margin-bottom: 100px;
+  border: 1px solid lightgray;
+}
+
+#results_HH, #canvas_gradient{
+  text-align: center;
+}
+
+#heatmap{
+  margin-top: 30px;
+  margin-bottom: 100px;
+}
+
+#MCM_table, #results_MH, #showmClustCompTable, #results_CP{
+  margin-bottom: 100px;
+}
+
+.loader {
+  border: 16px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 16px solid #3498db;
+  width: 120px;
+  height: 120px;
+  -webkit-animation: spin 2s linear infinite; /* Safari */
+  animation: spin 2s linear infinite;
+  position: absolute;
+  z-index: 1000;
+  display: none;
+}
+
+/* Safari */
+@-webkit-keyframes spin {
+  0% { -webkit-transform: rotate(0deg); }
+  100% { -webkit-transform: rotate(360deg); }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@media only screen and (max-width: 1000px) {
+  #helpDiv {
+    height: 700px;
+  }
+}
