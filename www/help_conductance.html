@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<link rel="stylesheet" href="helppages_css.css">
+
+<body>
+<p><b>This tab consists of two sub tabs: (i) Network and (ii) Conductance Histogram. </b></p>
+<p><b>Conductance</b><br>In this tab, the user can see how well a cluster describes a given network. Users must upload a network file in edge-list format and associate it with a clustering file of interest.</p>
+
+<p><b>Network file format</b><br>The network file is a two- or three-column (unweighted or weighted respectively) text file in which the two first columns describe the source and target nodes and the optional third column their in-between edge weights.</p>
+
+<div class="row">
+  <div class="columnF">
+    <pre>    N1	N10
+    N2	N11
+    N3	N12
+    N4	N13
+    N5	N14
+    N6	N15
+    N7	N16
+    N8	N17
+    N9	N18
+    N10	N18
+    N11	N18
+    N12	N18
+    N13	N18
+    N14	N18
+    N15	N18
+    N16	N18
+    N17	N1
+    N18	N1
+    N19	N1
+    N20	N1
+    N21	N1
+    N22	N1
+    N23	N1
+    N24	N1
+    N25	N1
+  </pre>
+  </div>
+  <!--<div class="columnF">
+    <h2>Clustering Data format</h2>
+    <pre><b>    Group-1	N2,N9,N10,N11,N14,N18,N37,N44,N45
+    Group-2	N1,N19,N20,N21,N22,N23,N24,N25,N36
+    Group-3	N26,N27,N28,N29,N30,N31,N32,N40
+    Group-4	N6,N15,N33,N41
+    Group-5	N8,N17,N35,N43
+    Group-6	N7,N16,N34,N42
+    Group-7	N5,N46,N47,N48,N49,N50
+    Group-8	N3,N12,N38
+    Group-9	N4,N13,N39
+  </b></pre>
+  </div>-->
+  </div>
+
+
+<p><b>Network</b><br>In this sub-tab, the uploaded network is visualized. After the user chooses a clustering file, network nodes are colored accordingly. We note that all network nodes must exist in the selected clustering file.</p>
+   <div class="row">
+  <div class="column">
+  <img src="pictures/19.jpg" alt="file_format" style="width:100%">
+  </div>
+  </div>
+  <div class="row">
+  <div class="column">
+  <img src="pictures/21.jpg" alt="file_format" style="width:100%">
+  </div>
+  </div>
+   <!--<div class="row">
+  <div class="column">
+  <img src="pictures/20.jpg" alt="file_format" style="width:100%">
+  </div>
+  </div>-->
+  
+<p><b>Conductance Histogram</b><br>In this sub-tab, the histogram of the conductance of the various clusters is visualized. The horizontal axis of the histogram shows the conductance scores and the vertical axis shows the number of clusters corresponding to each score. The more the plotted bars tilt towards 0, the better the clusters' conductance.</p>
+<div class="row">
+  <div class="column">
+  <img src="pictures/22.jpg" alt="file_format" style="width:100%">
+  </div>
+  </div>
+</body>
+</html>
