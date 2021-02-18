@@ -1,0 +1,63 @@
+ p {
+    display: inline-block;
+	  width: 90%;
+    font-family: "Arial";
+    color: black;
+    line-height: 1.6;
+    text-align: justify;
+  }
+
+ .b{
+    word-break: break-word;
+    font-family: "Arial";
+    color:black;
+  }
+  
+ h2, h3, a, div{
+	  font-family: Arial;
+	  color: black;
+	}
+ a{
+	   font-family: "Arial";
+     color:  #3d85c6;
+      
+    }
+	
+ .blueText{
+      
+        font-family: "Arial";
+        color: #3d85c6;
+        font-weight:bold;
+        
+        
+    }
+    
+ .blackText{
+     
+      font-family: "Arial";
+      color: black;
+      
+    }
+ 
+ * {
+  box-sizing: border-box;
+  }
+
+ .column {
+  float: left;
+ 
+  }
+  
+  .columnF {
+  float: left;
+  width: 50%;
+  padding: 50px;
+  }
+
+  
+
+  .row::after {
+  content: "";
+  clear: both;
+  display: table;
+  }
