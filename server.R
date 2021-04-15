@@ -1,6 +1,6 @@
 server <- function(input, output, session) {
   
-  source("global.R")
+  source("global.R", local=TRUE)
   
   session$sendCustomMessage("handler_disableTabs", T) # disable most tab panels until files are uploaded/analyzed
   
