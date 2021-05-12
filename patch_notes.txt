@@ -1,4 +1,9 @@
 Patch notes
 
+2021/05/12
+-Fixed a bug, where intersection filtering mode did not work properly for a subset of input files.
+-Fixed a bug, where an equal number of objects but with different names did not produce an error, as required.
+-Select/Deselect all metrics mode added.
+
 2021/04/15
-Fixed bug where global variables were shown as session variables.
+-Fixed bug where global variables were shown as session variables.

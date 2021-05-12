@@ -2,6 +2,7 @@
 library(shiny)
 library(shinyjs)
 library(shinythemes)
+library(shinyWidgets)
 library(mclustcomp)
 library(igraph)
 library(d3heatmap)

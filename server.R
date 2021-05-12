@@ -16,17 +16,16 @@ server <- function(input, output, session) {
        &bull; Handle multiple clustering results simultaneously</br>
        &bull; Apply thresholds on the cluster sizes </br>
        &bull; Compare different clustering results using ten different comparison metrics. </br>
-       &bull; Visualize clustering comparisons using interactive heatmaps, bar plots, networks, sankey and circos plots</br>
-       &bull; Apply thresholds on the clustering comparison metrics</br>
+       &bull; Visualize cluster set comparisons using interactive heatmaps, bar plots, networks, sankey and circos plots</br>
+       &bull; Apply thresholds on the cluster set comparison metrics</br>
        &bull; Calculate the cluster representation on a given network</br>
        &bull; Export publication-ready figures</br>
     </p></div>"
-    })
+  })
   
   # observe and reactive events ####
   observeEvent(input$inFiles,{
     inFiles <- input$inFiles
-    # updateData() # old, now updating from checkboxes
     for(i in 1:length(inFiles[[1]])){
       tryCatch({
         if (length(clusteringNames) == 0 || is.na(match(inFiles$name[[i]], clusteringNames))){
@@ -53,7 +52,6 @@ server <- function(input, output, session) {
               filtered_parsedData[[length(filtered_parsedData)+1]] <<- edgelist # push at the end of the list
               filtered_rawData[[length(filtered_rawData)+1]] <<- clusteringData # unparsed
               clusteringNames <<- c(clusteringNames, inFiles$name[[i]]) # push filename at the end of the matrix
-              # print(parsedData[[length(parsedData)]]) # debug
             } else session$sendCustomMessage("handler_alert", paste(inFiles$name[[i]], " needs to contain 2 columns. Column 1 = Cluster Names, Column 2: Comma-separated Object Names."))
           } else session$sendCustomMessage("handler_alert", paste(inFiles$name[[i]], ". File exceeds 1MB and is discarded."))
         } else session$sendCustomMessage("handler_alert", paste(inFiles$name[[i]], ". A file with that name already exists."))
@@ -64,9 +62,6 @@ server <- function(input, output, session) {
         session$sendCustomMessage("handler_alert", paste("Error in Uploaded file :  ", inFiles$name[[i]]))
       }, finally = {})
     }
-    # print(parsedData) # debug
-    # print(clusteringNames) # debug
-    # saveRDS(parsedData, "parsedData") # debug
     updateSliderInput(session, "filterSlider",
                       max = max_cluster_items,
                       value = c(1,max_cluster_items)
@@ -80,7 +75,7 @@ server <- function(input, output, session) {
     session$sendCustomMessage("handler_conductanceRadio", T)# creates the fileSelection Box in the conductance comparison tab panel
     return(T)
   })
-
+  
   observeEvent(input$filterDataButton,{ # cuts via slider thresholds and appends mutual exclusive singleton objects
     selectedFiles <- input$js_selectedStatFiles
     if (!identical(selectedFiles, NULL)){
@@ -95,26 +90,22 @@ server <- function(input, output, session) {
           # 2b. add mutually exclusive singletons for mclustcomp
           addMutuallyExclusiveSingletons(selectedFiles) # of selected Clusters # also parsing filtered data
       }
-    }
-    # saveRDS(filtered_rawData, "filtered_rawData.rds")
-    # saveRDS(filtered_parsedData, "filtered_parsedData.rds")
-    # saveRDS(rawData, "rawData.rds")
-    # saveRDS(parsedData, "parsedData.rds")
-    # 3. send session data
-    session$sendCustomMessage("handler_sendRawData", filtered_rawData)
-    session$sendCustomMessage("handler_sendData", filtered_parsedData) # send data to JS, and there, create data structures and Show Data panel (+ radio button to select file to show data)
-    session$sendCustomMessage("handler_updateShinyBarPlots", T) # updating r barplots real time
-    session$sendCustomMessage("handler_updateShinyHist_Data", T) # updating r histograms and tables
+      # 3. send session data
+      session$sendCustomMessage("handler_sendRawData", filtered_rawData)
+      session$sendCustomMessage("handler_sendData", filtered_parsedData) # send data to JS, and there, create data structures and Show Data panel (+ radio button to select file to show data)
+      session$sendCustomMessage("handler_updateShinyBarPlots", T) # updating r barplots real time
+      session$sendCustomMessage("handler_updateShinyHist_Data", T) # updating r histograms and tables
+      # move to filtered stats tab
+      updateTabsetPanel(session, "fileHandlingTabs", selected = "Filtered Files")
+      updateTabsetPanel(session, "filtered_stats", selected = "File Stats")
+    } else session$sendCustomMessage("handler_alert", "Please select files to filter.")
     return(T)
   })
   
   observeEvent(input$executeCC,{ # executing mClustComp library
-    # updateData() # updating "clusteringNames" and "parsedData" values from JavaScript (after deletions and/or renames) # old, now updating from checkboxes
     metrics <- input$metrics
     types <- ""
-    # print(metrics) # debug
     selectedFilesCC <- input$js_selectedFilesCC
-    # print(selectedFilesCC) # debug
     numFiles <- length(selectedFilesCC)
     errorFlag <<- F # resetting
     emptyFileFlag <- F
@@ -125,37 +116,44 @@ server <- function(input, output, session) {
       for (i in 1:numFiles){
         for(j in 1:numFiles){
           if (!errorFlag && !emptyFileFlag){
-            x <- as.numeric(filtered_parsedData[[selectedFilesCC[i]]][, 1])
-            y <- as.numeric(filtered_parsedData[[selectedFilesCC[j]]][, 1])
-            if (identical(x, character(0)) || identical(y, character(0))){
-              emptyFileFlag <- T
+            if (identical(sort(filtered_parsedData[[selectedFilesCC[i]]][, 2]), sort(filtered_parsedData[[selectedFilesCC[j]]][, 2]))){
+              x <- as.numeric(filtered_parsedData[[selectedFilesCC[i]]][, 1])
+              y <- as.numeric(filtered_parsedData[[selectedFilesCC[j]]][, 1])
+              if (identical(x, character(0)) || identical(y, character(0))){
+                emptyFileFlag <- T
+                break
+              }
+              tryCatch({
+                temp <- mclustcomp(x, y, types = metrics)
+                if (!is.na(match("nvi", temp$types))) temp[temp$types=="nvi", ]$scores <- 1 - temp[temp$types=="nvi", ]$scores # inverting nvi in [0, 1]
+              }, warning = function(w) {
+                print(paste("Warning:  ", w))
+              }, error = function(e) {
+                print(paste("Error :  ", e))
+                errorFlag <<- T
+                session$sendCustomMessage("handler_alert", paste("Make sure all compared cluster sets contain the same objects. Cluster Set ", clusteringNames[selectedFilesCC[i]], 
+                                                                 " has ", length(x) ," elements, while Cluster Set ", clusteringNames[selectedFilesCC[j]], 
+                                                                 " has ", length(y), " elements.", sep = ""))
+              }, finally = {
+                if (!errorFlag && !emptyFileFlag){
+                  # results for d3heatmaps in R, all against all
+                  d3heatmap_input <<- cbind(d3heatmap_input, as.numeric(temp[, 2]))
+                  colnames(d3heatmap_input)[ncol(d3heatmap_input)] <<- paste(clusteringNames[selectedFilesCC[i]], 
+                                                                             " vs ", clusteringNames[selectedFilesCC[j]], sep="")
+                  # results for javascript, only when j > i to avoid duplicates and self-metrics
+                  if (i < j){
+                    mclustcompResults <<- cbind(mclustcompResults, as.numeric(temp[, 2]))
+                    colnames(mclustcompResults)[ncol(mclustcompResults)] <<- paste(clusteringNames[selectedFilesCC[i]], 
+                                                                                   " vs ", clusteringNames[selectedFilesCC[j]], sep="")
+                  }
+                }
+              })
+            } else {
+              session$sendCustomMessage("handler_alert", paste("Make sure all compared cluster sets contain the same object names. Different object names in Cluster Set ", clusteringNames[selectedFilesCC[i]], 
+                                                               " and Cluster Set ", clusteringNames[selectedFilesCC[j]], sep = ""))
+              errorFlag <<- T
               break
             }
-            tryCatch({
-              temp <- mclustcomp(x, y, types = metrics)
-              if (!is.na(match("nvi", temp$types))) temp[temp$types=="nvi", ]$scores <- 1 - temp[temp$types=="nvi", ]$scores # inverting nvi in [0, 1]
-              # saveRDS(temp, "temp.rds")
-            }, warning = function(w) {
-              print(paste("Warning:  ", w))
-            }, error = function(e) {
-              print(paste("Error :  ", e))
-              errorFlag <<- T
-              session$sendCustomMessage("handler_alert", paste("Make sure all compared clusterings have the same number of objects. Clustering ", clusteringNames[selectedFilesCC[i]], 
-                                                               " has ", length(x) ," elements, while Clustering ", clusteringNames[selectedFilesCC[j]], " has ", length(y), " elements.", sep = ""))
-            }, finally = {
-              if (!errorFlag && !emptyFileFlag){
-                # results for d3heatmaps in R, all against all
-                d3heatmap_input <<- cbind(d3heatmap_input, as.numeric(temp[, 2]))
-                colnames(d3heatmap_input)[ncol(d3heatmap_input)] <<- paste(clusteringNames[selectedFilesCC[i]], 
-                                                                           " vs ", clusteringNames[selectedFilesCC[j]], sep="")
-                # results for javascript, only when j > i to avoid duplicates and self-metrics
-                if (i < j){
-                  mclustcompResults <<- cbind(mclustcompResults, as.numeric(temp[, 2]))
-                  colnames(mclustcompResults)[ncol(mclustcompResults)] <<- paste(clusteringNames[selectedFilesCC[i]], 
-                                                                                 " vs ", clusteringNames[selectedFilesCC[j]], sep="")
-                }
-              }
-            })
           }
         }
       }
@@ -163,7 +161,6 @@ server <- function(input, output, session) {
         if (!emptyFileFlag){
           clusteringNamesHeatmap <<- clusteringNames[selectedFilesCC]
           rownames(d3heatmap_input) <<- temp[, 1]
-          # print(d3heatmap_input) # debug
           rownames(mclustcompResults) <<- temp[, 1]
           types <- as.character(temp$types)
           session$sendCustomMessage("handler_sendMetrics", types)
@@ -175,10 +172,10 @@ server <- function(input, output, session) {
           session$sendCustomMessage("handler_initiateNetworkControls", T) # interactive networks tab, slider, colorpickers
           session$sendCustomMessage("handler_initiateSankeyPlotControls", T) # sankey plots tab, slider, colorpickers
           session$sendCustomMessage("handler_initiateCircosPlotControls", T) # circos plots tab,slider #maria
-		  updateTabsetPanel(session, "ccTabs",
+          updateTabsetPanel(session, "ccTabs",
                             selected = "Explore Metric Results"
           )
-		} else session$sendCustomMessage("handler_alert", "Empty set in chosen files.")
+        } else session$sendCustomMessage("handler_alert", "Empty set in chosen files.")
       }
       session$sendCustomMessage("handler_finishLoader", 1)
     } else session$sendCustomMessage("handler_alert", "Choose at least 1 metric and 2 files to compare.")
@@ -189,25 +186,25 @@ server <- function(input, output, session) {
     if (input$dataSelectionMCM1 != "" && input$dataSelectionMCM2 != ""){
       index1 <- match(input$dataSelectionMCM1, clusteringNames)
       index2 <- match(input$dataSelectionMCM2, clusteringNames)
-      result <- confusionMatrix(index1, index2)
-      resultTable <- maximumMatch(result$confmat, result$nk, result$nl)
-      colnames(resultTable) <- c("File 1", "File 2", "Overlap")
-      output$MCM_table <- DT::renderDataTable(as.data.frame(resultTable), server = FALSE, # renderTable({resultTable})
-                                              extensions = 'Buttons',
-                                              options = list(
-                                                pageLength = 5,
-                                                "dom" = 'T<"clear">lBfrtip',
-                                                buttons = list('copy', 'csv', 'excel', 'pdf', 'print')
-                                              ))
-        
+      if (identical(sort(filtered_parsedData[[index1]][, 2]), sort(filtered_parsedData[[index2]][, 2]))){
+        result <- confusionMatrix(index1, index2)
+        resultTable <- maximumMatch(result$confmat, result$nk, result$nl)
+        colnames(resultTable) <- c(input$dataSelectionMCM1, input$dataSelectionMCM2, "Overlap")
+        output$MCM_table <- DT::renderDataTable(as.data.frame(resultTable), server = FALSE, # renderTable({resultTable})
+                                                extensions = 'Buttons',
+                                                options = list(
+                                                  pageLength = 5,
+                                                  "dom" = 'T<"clear">lBfrtip',
+                                                  buttons = list('copy', 'csv', 'excel', 'pdf', 'print')
+                                                ))
+      } else session$sendCustomMessage("handler_alert", "Compared cluster sets do not contain the same object names. Choose a filtering option in the File Handling tab.")
     } else session$sendCustomMessage("handler_alert", "Choose 2 clustering files to compare.")
     return(T)
   })
   
-  observeEvent(input$executeCP,{ # executing Metric Histograms # maria
+  observeEvent(input$executeCP,{
     cp_metric <- input$js_cp_metric
     selectedFilesCP <- input$js_selectedFilesCP
-    # print(selectedFilesCP) # debug
     selectedFiles <- clusteringNamesHeatmap[selectedFilesCP]
     if (length(selectedFiles) > 1){
       input_parsed <- parseHeatMapInput(d3heatmap_input, cp_metric, selectedFiles) # empty third argument, parses the whole data of mclustcomp
@@ -216,25 +213,22 @@ server <- function(input, output, session) {
     return(T)
   })
   
-  observeEvent(input$executeMH,{ # executing Metric Histograms
+  observeEvent(input$executeMH,{
     session$sendCustomMessage("handler_executeMH", T)
     return(T)
   })
   
-  observeEvent(input$executeHH,{ # executing Hierarchical Heatmaps on button click
-    output$heatmap <- renderD3heatmap({ # renderD3heatmap
-      hh_metric <- input$js_hh_metric
-      # print(hh_metric) # debug
-      selectedFilesHH <- input$js_selectedFilesHH
-      # print(selectedFilesHH) # debug
-      selectedFiles <- clusteringNamesHeatmap[selectedFilesHH]
-      if (length(selectedFiles) > 1){
-        d3heatmap_input_parsed <- parseHeatMapInput(d3heatmap_input, hh_metric, selectedFiles)
-        # print(d3heatmap_input_parsed) # debug
+  observeEvent(input$executeHH,{
+    hh_metric <- input$js_hh_metric
+    selectedFilesHH <- input$js_selectedFilesHH
+    selectedFiles <- clusteringNamesHeatmap[selectedFilesHH]
+    if (length(selectedFiles) > 1){
+      d3heatmap_input_parsed <- parseHeatMapInput(d3heatmap_input, hh_metric, selectedFiles)
+      output$heatmap <- renderD3heatmap({
         d3heatmap(d3heatmap_input_parsed, dendrogram ='both', colors = "YlOrRd")
-      } else session$sendCustomMessage("handler_alert", "Choose at least 1 metric and 2 files to compare.")
-      # session$sendCustomMessage("handler_executeHH", T)
-    })
+      })
+    } else session$sendCustomMessage("handler_alert", "Choose at least 1 metric and 2 files to compare.")
+    # session$sendCustomMessage("handler_executeHH", T)
     return(T)
   })
   
@@ -275,11 +269,9 @@ server <- function(input, output, session) {
   
   observeEvent(input$executeC,{ # executing Conductance
     if (network_file_table[[1]][1] != ""){ # this means the edgelist has passed the validation test
-      # print(network_file_table) # debug
       selectedFilesC <- input$js_selectedFilesC
       if (!identical(selectedFilesC, NULL)){
         session$sendCustomMessage("handler_startLoader", 7) # 8th tab, counting 0
-        # print(selectedFilesC) # debug
         selectedFile <- clusteringNames[selectedFilesC]
         index <- match(selectedFile, clusteringNames)
         dataTypeOption <- input$condDataType # radio button for raw vs filtered data
@@ -344,12 +336,12 @@ server <- function(input, output, session) {
         printData <- matrix("", nrow = 0, ncol = 3)
         colnames(printData) <- c("Cluster", "Objects", "#Objects")
         output$filteredDataTable <- DT::renderDataTable(printData, server = FALSE,
-                                                extensions = 'Buttons',
-                                                options = list(
-                                                  pageLength = 5,
-                                                  "dom" = 'T<"clear">lBfrtip',
-                                                  buttons = list('copy', 'csv', 'excel', 'pdf', 'print')
-                                                ))
+                                                        extensions = 'Buttons',
+                                                        options = list(
+                                                          pageLength = 5,
+                                                          "dom" = 'T<"clear">lBfrtip',
+                                                          buttons = list('copy', 'csv', 'excel', 'pdf', 'print')
+                                                        ))
       }
     })
     
@@ -532,11 +524,8 @@ server <- function(input, output, session) {
     if (network_file_table != ""){
       tryCatch({
         graph <- createGraph(as.matrix(network_file_table))
-        # nodes <- V(graph)$name # old
-        # apply_layout_with_fr_cond(graph, nodes, as.matrix(network_file_table)) # old viz.js
         data <- toVisNetworkData(graph)
         nodes <- data$nodes
-        #if (!identical(input$js_selectedFilesC, NULL)){ # clustering file uploaded and exists
         if (length(clusteringNames) > 0){ # clustering file uploaded and exists
           colnames(filtered_parsedData[[input$js_selectedFilesC]]) <- c("color", "id")
           nodes <- merge(nodes, filtered_parsedData[[input$js_selectedFilesC]], all.x = T)
@@ -546,7 +535,6 @@ server <- function(input, output, session) {
         edges$weight <- mapper(edges$weight, 0.5, 5) # for better width visualization
         colnames(edges)[3] <- "width"
         output$network <- renderVisNetwork({
-          #visIgraph(graph) 
           visNetwork(nodes = nodes, edges = edges) %>%
             visIgraphLayout(layout = "layout_with_kk") %>% # layout_in_circle # layout_with_fr # layout_with_kk
             visInteraction(navigationButtons = TRUE, hover = TRUE)
@@ -584,7 +572,6 @@ server <- function(input, output, session) {
         session$sendCustomMessage("handler_alert", "Network weights (3rd column) must be numeric.")
       }
     }
-    # print(network_file_table) # debug
     return(valid)
   }
   
@@ -621,33 +608,31 @@ server <- function(input, output, session) {
       }
     }
     filtered_parsedData <<- parseData(filtered_rawData)
-    # saveRDS(filtered_parsedData, "filtered_parsedData.rds")
     return(T)
   }
   
   keepIntersection  <- function(selectedFiles){
-    table_participation <- table(do.call(rbind, filtered_parsedData)[,2])
+    table_participation <- table(do.call(rbind, filtered_parsedData[selectedFiles])[,2]) # count which nodes exist in all selected files
     commonNodes <- names(table_participation[table_participation == length(selectedFiles)]) # keep only nodes that exist in all files
     if (!identical(commonNodes, character(0))){
       for (i in 1:(length(selectedFiles))){
         temp_filtered_rawData <- matrix("", nrow = 0, ncol = 2)
         counter <- 1
-        if (nrow(filtered_rawData[[i]]) != 0){
-          for (j in 1:nrow(filtered_rawData[[i]])){
-            temp <- filtered_rawData[[i]][j, 2]
-            temp <- strsplit(temp, ",")
-            temp <- temp[[1]][which(temp[[1]] %in% commonNodes)] # keep only nodes that exist in commonNodes
+        if (nrow(filtered_rawData[[selectedFiles[i]]]) != 0){
+          for (j in 1:nrow(filtered_rawData[[selectedFiles[i]]])){
+            temp <- filtered_rawData[[selectedFiles[i]]][j, 2]
+            temp <- strsplit(temp, ",")[[1]]
+            temp <- temp[which(temp %in% commonNodes)] # keep only nodes that exist in commonNodes
             if (!identical(temp, character(0))){
               temp_filtered_rawData <- rbind(temp_filtered_rawData, c(paste("Cluster", counter, sep=""), paste(temp, collapse=",")))
               counter <- counter + 1
             }
           }
         }
-        filtered_rawData[[i]] <<- temp_filtered_rawData
+        filtered_rawData[[selectedFiles[i]]] <<- temp_filtered_rawData
       }
       filtered_parsedData <<- parseData(filtered_rawData)
     } else session$sendCustomMessage("handler_alert", "No common objects found in remaining clusters.")
-    # saveRDS(filtered_parsedData, "filtered_parsedData.rds")
     return(T)
   }
   
@@ -936,7 +921,7 @@ server <- function(input, output, session) {
   return_nodes_and_feature_name_given_row_from_feature_file <- function(row){
     m <- (str_split(row, "\t", simplify = TRUE))
     fnodes <- as.list(m[,2])    
-    feature <- as.list(m[,1]) #oles oi grammes ths prwths sthlhs
+    feature <- as.list(m[,1])
     tempList2 <- list("fnodes"=fnodes,"feature"=feature)
     return(tempList2)
   }
@@ -944,8 +929,8 @@ server <- function(input, output, session) {
   #---------------returns_vectorS---------------
   returns_vectorS <-function(G,n){
     x <- list()
-    n <- (str_split(n, ",", simplify = TRUE)[1,]) # n= pinakas me 1-1 nodes tou panw n
-    for (t in n){  #gyros1: a1, a2, a4 / gyros2: a3, a5 /gyros3: a2, a3 
+    n <- (str_split(n, ",", simplify = TRUE)[1,]) 
+    for (t in n){ 
       Ps <- t
       x[[paste0("", t)]] <- Ps
       
@@ -963,7 +948,7 @@ server <- function(input, output, session) {
     y <- list()
     T<-NULL
     for (sn in nnmatrix[,1]){
-      if (!(sn %in% vectorS)){ #an den einai ola sto S, o,ti perisseyei mpainei sto T
+      if (!(sn %in% vectorS)){
         Ps2 <- sn  
         y[[paste0("", sn)]] <- Ps2
         my <- matrix(unlist(y))
@@ -1020,23 +1005,23 @@ server <- function(input, output, session) {
     c3<-NULL
     
     for (row in rows){
-      f2 <- return_nodes_and_feature_name_given_row_from_feature_file(row) #pairnei 1-1 tis grammes
-      fnodes <- f2$fnodes #an to nodes to kanw show mesa se for tote ta deixnei ola osa exei mesa kai oxi mono to teleytaio
-      feature <- f2$feature #to idio kai edw
-      for (n in fnodes){ #n = node,node....
+      f2 <- return_nodes_and_feature_name_given_row_from_feature_file(row)
+      fnodes <- f2$fnodes
+      feature <- f2$feature
+      for (n in fnodes){
         vectorS<- returns_vectorS(G,n)
         vectorT<- returns_vectorT (G,vectorS,nnmatrix, network_file_matrix)
         
         Ssum<-0
         for(s in vectorS){
-          indexs<-which(as.matrix(netnodes[,1:2])  == s, arr.ind = TRUE) # indexs<-which(netnodes == s, arr.ind = TRUE)
+          indexs<-which(as.matrix(netnodes[,1:2])  == s, arr.ind = TRUE)
           Ssum<-Ssum+sum(as.numeric(netnodes[indexs[,1],3]))
         }
         
         if (!(is.null(vectorT))){
           Tsum<-0
           for(t in vectorT){
-            indext<-which(as.matrix(netnodes[,1:2]) == t, arr.ind = TRUE) # indext<-which(netnodes == t, arr.ind = TRUE)
+            indext<-which(as.matrix(netnodes[,1:2]) == t, arr.ind = TRUE)
             Tsum<-Tsum+sum(as.numeric(netnodes[indext[,1],3]))
           }
           bound<-boundary(G,vectorS,vectorT)
@@ -1044,39 +1029,28 @@ server <- function(input, output, session) {
           c1<-toString(conductance)
           c2<-paste(c2,c1,sep="-")
           c3<-as.list(as.numeric(strsplit(c2, "-")[[1]]))
-          # show(conductance)
           
         }else{
           conductance<-0
-          # show(conductance)
         }
       }
     }
     
-    if(!(is.null(c3))){ #conductance!=0
-      if(c3[[2]]==1){ #conductance=1
+    if(!(is.null(c3))){ # conductance != 0
+      if(c3[[2]]==1){ # conductance == 1
         c4<-as.list(as.numeric(c3)+0.1)
         v_c4<-unlist(c4)
         v_c3<-unlist(c3)
-
-        # hist(v_c3[c(2:length(v_c3))],
-        #      main="Histogram of Conductance",
-        #      xlab="Conductance",
-        #      ylab="Number of samples in Range",
-        #      xlim=c(0,1),
-        #      breaks=c(v_c3[c(2)],v_c4[c(2)]),
-        #      col = "orange") #number of samples...=number clusters
-
+        
         output$histConductance <- renderPlot({h <- hist(v_c3[c(2:length(v_c3))],
                                                         main="Histogram of Conductance",
                                                         xlab="Conductance", ylab="# samples in Range",
                                                         col="cornflowerblue",
                                                         breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1))
         text(h$mids, h$counts, labels=h$counts, adj=c(0.5, -0.5))})
-
-      }else{ #conductance = (0,1)
+        
+      }else{ # conductance = (0,1)
         v_c3<-unlist(c3)
-        # hist(v_c3[c(2:length(v_c3))],main="Histogram of Conductance",xlab="Conductance",ylab="Number of samples in Range",xlim=c(0,1) ,col = "orange") #number of samples...=number clusters
         output$histConductance <- renderPlot({h <- hist(v_c3[c(2:length(v_c3))],
                                                         main="Histogram of Conductance",
                                                         xlab="Conductance", ylab="# samples in Range",
@@ -1084,10 +1058,8 @@ server <- function(input, output, session) {
                                                         breaks = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1))
         text(h$mids, h$counts, labels=h$counts, adj=c(0.5, -0.5))})
       }
-
+      
     } else{ #conductance=0
-      #hist(conductance,main="Histogram of Conductance",xlab="Conductance",ylab="Number of samples in Range",xlim=c(0,1),breaks=c(0,0.1),col = "orange") #number of samples...=number clusters
-
       output$histConductance <- renderPlot({h <- hist(conductance,
                                                       main="Histogram of Conductance",
                                                       xlab="Conductance", ylab="# samples in Range",
