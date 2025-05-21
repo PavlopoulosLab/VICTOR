@@ -9,3 +9,8 @@ With VICTOR one can:
 • Apply thresholds on the cluster set comparison metrics  
 • Calculate the cluster representation on a given network  
 • Export publication-ready figures
+
+Publication
+VICTOR: A visual analytics web application for comparing cluster sets
+Karatzas E., Gkonta M., Hotova J., Baltoumas FA., Kontou PI., Bobotsis CJ., Bagos PG., Pavlopoulos GA.
+Computers in Biology and Medicine, 8 June 2021, 104557, ISSN 0010-4825, https://doi.org/10.1016/j.compbiomed.2021.104557. PMID:34139436
