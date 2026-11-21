@@ -353,50 +353,139 @@
 
   // ---------------------------------------------------------------- similarity map (2D embedding)
   // names: [n], points: [[x, y]] from core.mds; closer points are more similar cluster sets.
+  // opts: { matrix: symmetric similarities, sizes: [number per set], sizeLabel, links: [{ i, j, value }], metric }
+  // Circle colour = average similarity to the other sets, circle size = opts.sizes, lines = opts.links.
   function map(el, names, points, opts) {
     clear(el);
     opts = opts || {};
     var t = theme(), n = names.length;
     if (n < 3) return emptyState(el, "A map needs at least three cluster sets.");
-    var W = chartWidth(el), H = Math.max(360, Math.min(600, W * 0.6)), pad = narrow(W) ? 46 : 80;
-    var svg = svgRoot(el, W, H, opts.label);
+    var W = chartWidth(el), small = narrow(W), H = small ? Math.round(W * 1.05) : Math.max(400, Math.min(620, W * 0.6));
+    var pad = small ? 82 : 96, legendH = 54;
     var xs = points.map(function (p) { return p[0]; }), ys = points.map(function (p) { return p[1]; });
     var span = Math.max(d3.max(xs) - d3.min(xs), d3.max(ys) - d3.min(ys), 1e-9);
-    var scale = Math.min((W - 2 * pad) / span, (H - 2 * pad) / span); // one scale for both axes: distances stay comparable
-    var cx = (d3.max(xs) + d3.min(xs)) / 2, cy = (d3.max(ys) + d3.min(ys)) / 2;
-    var px = function (p) { return W / 2 + (p[0] - cx) * scale; }, py = function (p) { return H / 2 + (p[1] - cy) * scale; };
-    svg.append("rect").attr("x", 1).attr("y", 1).attr("width", W - 2).attr("height", H - 2).attr("rx", 8).attr("fill", "none").attr("stroke", t.grid);
-    // the strongest link of every set, as orientation
-    if (opts.matrix) {
-      var drawn = {};
-      names.forEach(function (name, i) {
-        var best = -1, bestValue = -Infinity;
-        names.forEach(function (other, j) { if (j !== i && opts.matrix[i][j] > bestValue) { bestValue = opts.matrix[i][j]; best = j; } });
-        var key = Math.min(i, best) + "|" + Math.max(i, best);
-        if (best < 0 || drawn[key]) return;
-        drawn[key] = true;
-        svg.append("line").attr("x1", px(points[i])).attr("y1", py(points[i])).attr("x2", px(points[best])).attr("y2", py(points[best]))
-          .attr("stroke", t.neutral).attr("stroke-width", 1.5).attr("stroke-dasharray", "4 4");
-      });
-    }
-    var g = svg.append("g").selectAll("g").data(names).enter().append("g")
-      .attr("transform", function (d, i) { return "translate(" + px(points[i]) + "," + py(points[i]) + ")"; });
-    g.append("circle").attr("r", 16).attr("fill", "transparent");
-    g.append("circle").attr("r", 7).attr("fill", t.series[0]).attr("stroke", t.surface).attr("stroke-width", 2);
-    g.append("text").attr("y", -12).attr("text-anchor", "middle").attr("fill", t.text).attr("font-size", 12)
-      .attr("paint-order", "stroke").attr("stroke", t.surface).attr("stroke-width", 3)
-      .text(function (d) { return clip(d, narrow(W) ? 12 : 24); });
-    hover(g, function (d) {
-      var i = names.indexOf(d), rows = [];
-      if (opts.matrix) {
-        names.map(function (other, j) { return { other: other, v: j === i ? null : opts.matrix[i][j] }; })
-          .filter(function (o) { return o.v !== null; }).sort(function (a, b) { return b.v - a.v; }).slice(0, 4)
-          .forEach(function (o) { rows.push([o.other, fmt(o.v)]); });
-      }
-      return [d + (rows.length ? ": most similar to" : ""), rows];
+    var scale = Math.min((W - 2 * pad) / span, (H - legendH - 2 * pad * 0.6) / span); // one scale for both axes: distances stay comparable
+    var cx = (d3.max(xs) + d3.min(xs)) / 2, cy = (d3.max(ys) + d3.min(ys)) / 2, midY = (H - legendH) / 2;
+    var px = function (p) { return W / 2 + (p[0] - cx) * scale; }, py = function (p) { return midY + (p[1] - cy) * scale; };
+    var matrix = opts.matrix, sizes = opts.sizes || names.map(function () { return 1; });
+    var average = names.map(function (name, a) {
+      var sum = 0;
+      names.forEach(function (other, b) { if (b !== a) sum += matrix ? matrix[a][b] : 0; });
+      return sum / (n - 1);
     });
-    svg.append("text").attr("x", 12).attr("y", H - 12).attr("fill", t.muted).attr("font-size", 11)
-      .text("Closer points are more similar. Dashed lines join each set to its most similar one.");
+    var color = sequential(d3.min(average), d3.max(average));
+    var radius = d3.scaleSqrt().domain([0, d3.max(sizes) || 1]).range([small ? 5 : 6, small ? 12 : 17]);
+
+    // sets drawn on the same spot share one mark and one label
+    var spots = [];
+    names.forEach(function (name, a) {
+      var at = { x: px(points[a]), y: py(points[a]) };
+      var same = spots.filter(function (s) { return Math.abs(s.x - at.x) < 3 && Math.abs(s.y - at.y) < 3; })[0];
+      if (same) same.members.push(a); else spots.push({ x: at.x, y: at.y, members: [a] });
+    });
+    var spotOf = {};
+    spots.forEach(function (s) {
+      s.r = d3.max(s.members, function (a) { return radius(sizes[a]); });
+      s.label = s.members.map(function (a) { return clip(names[a], small ? 11 : 22); }).join(" = ");
+      s.members.forEach(function (a) { spotOf[a] = s; });
+    });
+
+    var svg = svgRoot(el, W, H, opts.label);
+    svg.append("rect").attr("x", 1).attr("y", 1).attr("width", W - 2).attr("height", H - legendH - 2).attr("rx", 8).attr("fill", t.surface).attr("stroke", t.grid);
+    var clipId = "mapclip" + Math.random().toString(36).slice(2);
+    svg.append("defs").append("clipPath").attr("id", clipId).append("rect").attr("x", 2).attr("y", 2).attr("width", W - 4).attr("height", H - legendH - 4).attr("rx", 7);
+    var view = svg.append("g").attr("clip-path", "url(#" + clipId + ")").append("g");
+
+    // lines between similar sets: thicker and darker when more similar
+    var links = (opts.links || []).filter(function (l) { return spotOf[l.i] !== spotOf[l.j]; });
+    var lo = d3.min(links, function (l) { return l.value; }), hi = d3.max(links, function (l) { return l.value; });
+    var rel = function (l) { return hi > lo ? (l.value - lo) / (hi - lo) : 1; };
+    var lineSel = view.append("g").selectAll("line").data(links).enter().append("line")
+      .attr("x1", function (l) { return spotOf[l.i].x; }).attr("y1", function (l) { return spotOf[l.i].y; })
+      .attr("x2", function (l) { return spotOf[l.j].x; }).attr("y2", function (l) { return spotOf[l.j].y; })
+      .attr("stroke", t.series[0]).attr("stroke-linecap", "round")
+      .attr("stroke-width", function (l) { return 1 + 5 * rel(l); }).attr("stroke-opacity", function (l) { return 0.12 + 0.5 * rel(l); });
+    hover(lineSel, function (l) { return [names[l.i] + " vs " + names[l.j], [[opts.metric || "Similarity", fmt(l.value)]]]; },
+      function () { this.setAttribute("stroke-opacity", 0.95); }, function () { resetLines(); });
+    function resetLines() { lineSel.attr("stroke-opacity", function (l) { return 0.12 + 0.5 * rel(l); }); }
+
+    var spotSel = view.append("g").selectAll("g").data(spots).enter().append("g")
+      .attr("transform", function (s) { return "translate(" + s.x + "," + s.y + ")"; });
+    spotSel.append("circle").attr("r", function (s) { return s.r + 9; }).attr("fill", "transparent");
+    spotSel.append("circle").attr("class", "mark").attr("r", function (s) { return s.r; })
+      .attr("fill", function (s) { return color(d3.mean(s.members, function (a) { return average[a]; })); })
+      .attr("stroke", t.text).attr("stroke-width", 1.5);
+    // labels point away from the middle of the map, so they stay clear of the other points
+    spotSel.append("text").attr("font-size", 12).attr("fill", t.text)
+      .attr("paint-order", "stroke").attr("stroke", t.surface).attr("stroke-width", 4).attr("stroke-linejoin", "round")
+      .text(function (s) { return s.label; });
+    // Each label tries four positions, starting with the one pointing away from the middle of the map,
+    // and takes the first that does not cover a label placed before it or leave the frame.
+    var placedBoxes = spots.map(function (s) { return [s.x - s.r - 1, s.y - s.r - 1, 2 * s.r + 2, 2 * s.r + 2]; }); // the circles themselves
+    spotSel.select("text").each(function (s) {
+      var sel = d3.select(this), dx = s.x - W / 2, dy = s.y - midY, w = this.getComputedTextLength(), h = 14;
+      var options = {
+        right: { x: s.r + 6, y: 4, anchor: "start", box: [s.x + s.r + 6, s.y - 8, w, h] },
+        left: { x: -s.r - 6, y: 4, anchor: "end", box: [s.x - s.r - 6 - w, s.y - 8, w, h] },
+        below: { x: 0, y: s.r + 15, anchor: "middle", box: [s.x - w / 2, s.y + s.r + 4, w, h] },
+        above: { x: 0, y: -s.r - 7, anchor: "middle", box: [s.x - w / 2, s.y - s.r - 19, w, h] }
+      };
+      var side = dx >= 0 ? "right" : "left", other = dx >= 0 ? "left" : "right", vertical = dy >= 0 ? "below" : "above", opposite = dy >= 0 ? "above" : "below";
+      var order = Math.abs(dx) > Math.abs(dy) * 0.6 ? [side, vertical, opposite, other] : [vertical, side, other, opposite];
+      var free = function (b) {
+        if (b[0] < 4 || b[0] + b[2] > W - 4 || b[1] < 22 || b[1] + b[3] > H - legendH - 4) return false;
+        return !placedBoxes.some(function (o) { return b[0] < o[0] + o[2] + 2 && o[0] < b[0] + b[2] + 2 && b[1] < o[1] + o[3] && o[1] < b[1] + b[3]; });
+      };
+      var pick = order.filter(function (name) { return free(options[name].box); })[0] || order[0], chosen = options[pick];
+      placedBoxes.push(chosen.box);
+      sel.attr("x", chosen.x).attr("y", chosen.y).attr("text-anchor", chosen.anchor);
+    });
+    hover(spotSel, function (s) {
+      var a = s.members[0], rows = [[opts.sizeLabel || "Size", s.members.map(function (m) { return sizes[m].toLocaleString(); }).join(", ")],
+        ["Average similarity", fmt(d3.mean(s.members, function (m) { return average[m]; }))]];
+      names.map(function (other, b) { return { other: other, v: s.members.indexOf(b) >= 0 ? null : matrix[a][b] }; })
+        .filter(function (o) { return o.v !== null; }).sort(function (x, y) { return y.v - x.v; }).slice(0, 4)
+        .forEach(function (o) { rows.push(["→ " + clip(o.other, 20), fmt(o.v)]); });
+      return [s.members.map(function (m) { return names[m]; }).join(" = "), rows];
+    }, function (s) {
+      lineSel.attr("stroke-opacity", function (l) { return spotOf[l.i] === s || spotOf[l.j] === s ? 0.95 : 0.04; });
+      d3.select(this).select("circle.mark").attr("stroke-width", 3);
+    }, function () { resetLines(); d3.select(this).select("circle.mark").attr("stroke-width", 1.5); });
+
+    // zoom with Ctrl/Cmd + scroll or a pinch, pan by dragging; plain scrolling still moves the page
+    var zoom = d3.zoom().scaleExtent([0.6, 10])
+      .filter(function () {
+        var e = d3.event;
+        if (e.type === "wheel") return e.ctrlKey || e.metaKey;
+        if (e.type.indexOf("touch") === 0) return e.touches.length > 1;
+        return !e.button;
+      })
+      .on("zoom", function () { view.attr("transform", d3.event.transform); hideTip(); });
+    svg.call(zoom).on("dblclick.zoom", null).style("touch-action", "pan-y");
+    svg.on("dblclick", function () { svg.call(zoom.transform, d3.zoomIdentity); });
+
+    // legends: what colour, size and distance mean
+    var ly = H - legendH + 14, barW = small ? 90 : 230;
+    colorBar(svg, 10, ly, barW, d3.min(average), d3.max(average), t, small ? "" : "average similarity");
+    if (opts.sizes) {
+      var sx = 10 + barW + (small ? 26 : 44), big = d3.max(sizes), smallest = d3.min(sizes);
+      [smallest, big].filter(function (v, k) { return k === 0 || big > smallest; }).forEach(function (v, k) {
+        var r = radius(v), x = sx + k * (small ? 34 : 46) + 17;
+        svg.append("circle").attr("cx", x).attr("cy", ly + 6).attr("r", Math.min(r, 14)).attr("fill", "none").attr("stroke", t.muted).attr("stroke-width", 1.5);
+        svg.append("text").attr("x", x).attr("y", ly + 37).attr("text-anchor", "middle").attr("fill", t.muted).attr("font-size", 11).text(v.toLocaleString());
+      });
+      if (!small) svg.append("text").attr("x", sx + 104).attr("y", ly + 10).attr("fill", t.muted).attr("font-size", 11).text(opts.sizeLabel || "size");
+    }
+    // scale bar: how far apart two points are for a given drop in similarity
+    var unit = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1].filter(function (u) { return u * scale >= 40; })[0] || 1, barLen = unit * scale;
+    if (barLen <= W * 0.36) {
+      var bx = W - 12 - barLen;
+      svg.append("path").attr("d", "M" + bx + "," + (ly + 2) + "v8h" + barLen + "v-8").attr("fill", "none").attr("stroke", t.muted).attr("stroke-width", 1.5);
+      svg.append("text").attr("x", W - 12).attr("y", ly + 26).attr("text-anchor", "end").attr("fill", t.muted).attr("font-size", 11)
+        .text(small ? "similarity \u2212" + unit : "similarity lower by " + unit);
+    }
+    if (!small) svg.append("text").attr("x", 12).attr("y", 18).attr("fill", t.muted).attr("font-size", 11)
+      .text("Drag to pan, Ctrl or Cmd + scroll to zoom, double-click to reset.");
   }
 
   // ---------------------------------------------------------------- hierarchical heatmap

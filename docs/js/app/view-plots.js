@@ -133,6 +133,15 @@ function drawPlot(r, pairs) {
   } else if (v.kind === "map") {
     var placed = C.mds(distanceMatrix(r, matrix));
     opts.matrix = r.names.map(function (a, i) { return r.names.map(function (b, j) { return i === j ? 1 : symmetric(matrix, i, j); }); });
+    opts.sizes = r.ids.map(function (id) { return setById(id).filtered.length; });
+    opts.sizeLabel = "Number of clusters";
+    // lines for the pairs at or above "Hide below", strongest first, at most three per set so the map stays readable
+    var lines = [];
+    r.names.forEach(function (a, i) { for (var j = i + 1; j < r.names.length; j++) lines.push({ i: i, j: j, value: opts.matrix[i][j] }); });
+    lines = lines.filter(function (l) { return l.value >= v.threshold - 1e-9; }).sort(function (x, y) { return y.value - x.value; });
+    var limit = 3 * r.names.length;
+    if (lines.length > limit) notes.push("Lines are drawn for the " + limit + " most similar pairs.");
+    opts.links = lines.slice(0, limit);
     G.map(chart, r.names, placed.points, opts);
     if (placed.fit !== null && r.names.length > 3) {
       notes.push("The distances on the map match the real ones with a correlation of " + placed.fit.toFixed(2) +

@@ -8,6 +8,7 @@ Patch notes
 -UpSet plot in the Files tab showing which objects the selected cluster sets share, when they differ.
 -Metrics that are too costly for the loaded sets are skipped with a notice; large comparisons ask before running.
 -Sankey and circos plots have a second view, "Objects between clusters": clusters as blocks or arcs, bands for shared objects, hover to highlight, click to follow a cluster through every set, drag to reorder. The set-level Sankey gained hover highlighting and dragging.
+-Similarity map redrawn: circle colour for average similarity, size for the number of clusters, lines between similar pairs that follow "Hide below", labels that avoid each other, coinciding sets merged, legends and a scale bar, pan and zoom.
 -The similarity map is refined by stress minimization after the classical start, which reproduces the distances better.
 -Networks are drawn with Cytoscape.js: six layouts (force-directed, concentric, circle, grid, tree, random) plus "clusters apart", zoom, pan, drag and fit to view.
 -API: data can be loaded by a #json= link, by window.postMessage (which can also return the computed results) and through VICTOR.api; a new API tab documents it with a live panel.
