@@ -1,0 +1,699 @@
+/*
+ * VICTOR charts: d3 (v5) renderers. Every SVG is styled with attributes only (no CSS classes),
+ * so a chart can be exported as a standalone SVG or PNG.
+ */
+(function (global) {
+  "use strict";
+
+  var VICTOR = global.VICTOR = global.VICTOR || {};
+  var d3 = global.d35; // d3 v5 bundle, exported under the name d35
+  var FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  var activeSimulations = {};
+
+  // ---------------------------------------------------------------- theme
+  function isDark() {
+    return document.documentElement.getAttribute("data-theme") === "dark";
+  }
+
+  function theme() {
+    var dark = isDark();
+    return dark ? {
+      dark: true, surface: "#1a1a19", text: "#f0efec", muted: "#c3c2b7", grid: "#383835", neutral: "#5b5a55",
+      series: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#0ca30c", "#9085e9", "#e66767"],
+      seqLow: "#16345c", seqHigh: "#b7d3f6"
+    } : {
+      dark: false, surface: "#fcfcfb", text: "#0b0b0b", muted: "#52514e", grid: "#e4e3df", neutral: "#b9b8b2",
+      series: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"],
+      seqLow: "#cde2fb", seqHigh: "#0d366b"
+    };
+  }
+
+  // one-hue sequential scale over [lo, hi]
+  function sequential(lo, hi) {
+    var t = theme(), interp = d3.interpolateRgb(t.seqLow, t.seqHigh);
+    if (!(hi > lo)) return function () { return interp(0.6); };
+    return function (v) { return interp(Math.max(0, Math.min(1, (v - lo) / (hi - lo)))); };
+  }
+
+  function readableOn(color) {
+    var c = d3.rgb(color), lum = (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255;
+    return lum > 0.55 ? "#0b0b0b" : "#ffffff";
+  }
+
+  // ---------------------------------------------------------------- helpers
+  function fmt(v) { return v === null || v === undefined || !isFinite(v) ? "n/a" : Number(v).toFixed(3); }
+  // middle ellipsis keeps both ends of a name, which is where names usually differ
+  function clip(s, n) {
+    s = String(s);
+    if (s.length <= n) return s;
+    var head = Math.ceil((n - 1) / 2), tail = Math.floor((n - 1) / 2);
+    return s.slice(0, head) + "\u2026" + (tail > 0 ? s.slice(s.length - tail) : "");
+  }
+  function textWidth(s, px) { return String(s).length * (px || 12) * 0.56; }
+  function chartWidth(el, fallback) { return Math.max(260, el.clientWidth || fallback || 720); }
+  function narrow(W) { return W < 480; }
+
+  function clear(el, key) {
+    if (key && activeSimulations[key]) { activeSimulations[key].stop(); delete activeSimulations[key]; }
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
+
+  function emptyState(el, message) {
+    var p = document.createElement("p");
+    p.className = "chart-empty";
+    p.textContent = message;
+    el.appendChild(p);
+  }
+
+  function svgRoot(el, width, height, label) {
+    return d3.select(el).append("svg")
+      .attr("xmlns", "http://www.w3.org/2000/svg")
+      .attr("width", width).attr("height", height)
+      .attr("viewBox", "0 0 " + width + " " + height)
+      .attr("role", "img").attr("aria-label", label || "chart")
+      .attr("font-family", FONT).attr("font-size", 12);
+  }
+
+  // tooltip: title plus [label, value] rows, built with textContent (file names are user input)
+  var tipEl = null;
+  function showTip(event, title, rows) {
+    if (!tipEl) {
+      tipEl = document.createElement("div");
+      tipEl.className = "tooltip";
+      document.body.appendChild(tipEl);
+    }
+    while (tipEl.firstChild) tipEl.removeChild(tipEl.firstChild);
+    var h = document.createElement("div");
+    h.className = "tooltip-title";
+    h.textContent = title;
+    tipEl.appendChild(h);
+    (rows || []).forEach(function (r) {
+      var row = document.createElement("div"), k = document.createElement("span"), v = document.createElement("b");
+      row.className = "tooltip-row";
+      k.textContent = r[0];
+      v.textContent = r[1];
+      row.appendChild(k);
+      row.appendChild(v);
+      tipEl.appendChild(row);
+    });
+    tipEl.style.display = "block";
+    var pad = 14, w = tipEl.offsetWidth, hgt = tipEl.offsetHeight;
+    var x = event.clientX + pad, y = event.clientY + pad;
+    if (x + w > global.innerWidth - 8) x = event.clientX - w - pad;
+    if (y + hgt > global.innerHeight - 8) y = event.clientY - hgt - pad;
+    tipEl.style.left = Math.max(4, x) + "px";
+    tipEl.style.top = Math.max(4, y) + "px";
+  }
+  function hideTip() { if (tipEl) tipEl.style.display = "none"; }
+  // touch screens send no mouseleave when the finger moves on, so a tap outside a chart closes the tooltip
+  document.addEventListener("touchstart", function (e) {
+    if (!e.target.closest || !e.target.closest(".chart")) hideTip();
+  }, { passive: true });
+  global.addEventListener("scroll", hideTip, { passive: true });
+
+  // attaches hover behaviour to every node of a selection; content(d) returns [title, rows]
+  function hover(selection, content, onEnter, onLeave) {
+    selection.each(function (d) {
+      var node = this;
+      node.addEventListener("mousemove", function (e) { var c = content(d); showTip(e, c[0], c[1]); });
+      node.addEventListener("mouseenter", function () { if (onEnter) onEnter.call(node, d); });
+      node.addEventListener("mouseleave", function () { hideTip(); if (onLeave) onLeave.call(node, d); });
+    });
+  }
+
+  // bar with a rounded data end, anchored flat on the baseline
+  function hBarPath(x0, y, w, h, r) {
+    r = Math.min(r, Math.abs(w), h / 2);
+    if (w >= 0) return "M" + x0 + "," + y + "h" + (w - r) + "a" + r + "," + r + " 0 0 1 " + r + "," + r + "v" + (h - 2 * r) +
+      "a" + r + "," + r + " 0 0 1 " + (-r) + "," + r + "h" + (-(w - r)) + "z";
+    return "M" + x0 + "," + y + "h" + (w + r) + "a" + r + "," + r + " 0 0 0 " + (-r) + "," + r + "v" + (h - 2 * r) +
+      "a" + r + "," + r + " 0 0 0 " + r + "," + r + "h" + (-(w + r)) + "z";
+  }
+  function vBarPath(x, y0, w, h, r) { // grows upwards from y0
+    r = Math.min(r, h, w / 2);
+    return "M" + x + "," + y0 + "v" + (-(h - r)) + "a" + r + "," + r + " 0 0 1 " + r + "," + (-r) + "h" + (w - 2 * r) +
+      "a" + r + "," + r + " 0 0 1 " + r + "," + r + "v" + (h - r) + "z";
+  }
+
+  function legend(svg, items, x, y, t) {
+    var g = svg.append("g").attr("transform", "translate(" + x + "," + y + ")"), offset = 0;
+    items.forEach(function (it) {
+      g.append("rect").attr("x", offset).attr("y", -9).attr("width", 10).attr("height", 10).attr("rx", 2).attr("fill", it.color);
+      g.append("text").attr("x", offset + 15).attr("y", 0).attr("fill", t.muted).text(it.label);
+      offset += 15 + textWidth(it.label) + 18;
+    });
+  }
+
+  function colorBar(svg, x, y, w, lo, hi, t, label) {
+    var id = "grad" + Math.random().toString(36).slice(2), defs = svg.append("defs");
+    var grad = defs.append("linearGradient").attr("id", id);
+    grad.append("stop").attr("offset", "0%").attr("stop-color", t.seqLow);
+    grad.append("stop").attr("offset", "100%").attr("stop-color", t.seqHigh);
+    svg.append("rect").attr("x", x).attr("y", y).attr("width", w).attr("height", 10).attr("rx", 2).attr("fill", "url(#" + id + ")");
+    svg.append("text").attr("x", x).attr("y", y + 24).attr("fill", t.muted).text(fmt(lo));
+    svg.append("text").attr("x", x + w).attr("y", y + 24).attr("fill", t.muted).attr("text-anchor", "end").text(fmt(hi));
+    if (label && w >= 150) svg.append("text").attr("x", x + w / 2).attr("y", y + 24).attr("fill", t.muted).attr("text-anchor", "middle").text(label);
+  }
+
+  // ---------------------------------------------------------------- grouped columns (file statistics)
+  // categories: [names], series: [{ name, values }]
+  function columns(el, categories, series, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme();
+    if (categories.length === 0) return emptyState(el, "No cluster sets selected.");
+    var W = chartWidth(el, 520), m = { top: 44, right: 12, bottom: 64, left: 48 }, H = 294;
+    var svg = svgRoot(el, W, H, opts.label);
+    var x0 = d3.scaleBand().domain(d3.range(categories.length)).range([m.left, W - m.right]).paddingInner(0.3).paddingOuter(0.15);
+    var x1 = d3.scaleBand().domain(d3.range(series.length)).range([0, x0.bandwidth()]);
+    var maxV = d3.max(series, function (s) { return d3.max(s.values); }) || 1;
+    var y = d3.scaleLinear().domain([0, maxV]).nice(4).range([H - m.bottom, m.top]);
+    y.ticks(4).forEach(function (tick) {
+      svg.append("line").attr("x1", m.left).attr("x2", W - m.right).attr("y1", y(tick)).attr("y2", y(tick)).attr("stroke", t.grid);
+      svg.append("text").attr("x", m.left - 8).attr("y", y(tick) + 4).attr("text-anchor", "end").attr("fill", t.muted).text(tick);
+    });
+    var barW = Math.min(44, x1.bandwidth() - 2), showValues = categories.length * series.length <= 24;
+    series.forEach(function (s, si) {
+      var g = svg.append("g");
+      var bars = g.selectAll("path").data(s.values).enter().append("path")
+        .attr("d", function (v, i) {
+          return vBarPath(x0(i) + x1(si) + (x1.bandwidth() - barW) / 2, y(0), barW, Math.max(0, y(0) - y(v)), 4);
+        })
+        .attr("fill", t.series[si]);
+      bars.each(function (v, i) {
+        this.addEventListener("mousemove", function (e) { showTip(e, categories[i], [[s.name, String(v)]]); });
+        this.addEventListener("mouseleave", hideTip);
+      });
+      if (showValues) {
+        g.selectAll("text").data(s.values).enter().append("text")
+          .attr("x", function (v, i) { return x0(i) + x1(si) + x1.bandwidth() / 2; })
+          .attr("y", function (v) { return y(v) - 5; })
+          .attr("text-anchor", "middle").attr("fill", t.muted).attr("font-size", 11).text(function (v) { return v; });
+      }
+    });
+    var maxChars = Math.max(6, Math.floor(x0.step() / 6.5)), rotate = categories.some(function (c) { return c.length > maxChars; });
+    categories.forEach(function (c, i) {
+      var cx = x0(i) + x0.bandwidth() / 2, text = svg.append("text").attr("fill", t.text).text(clip(c, rotate ? 16 : maxChars));
+      if (rotate) text.attr("transform", "translate(" + cx + "," + (H - m.bottom + 14) + ") rotate(-35)").attr("text-anchor", "end");
+      else text.attr("x", cx).attr("y", H - m.bottom + 18).attr("text-anchor", "middle");
+      text.append("title").text(c);
+    });
+    svg.append("line").attr("x1", m.left).attr("x2", W - m.right).attr("y1", y(0)).attr("y2", y(0)).attr("stroke", t.neutral);
+    if (series.length > 1) legend(svg, series.map(function (s, i) { return { label: s.name, color: t.series[i] }; }), m.left, 14, t);
+  }
+
+  // ---------------------------------------------------------------- histogram
+  // values: numbers. opts: { xLabel, yLabel, domain: [lo, hi], bins, integer }
+  function histogram(el, values, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme();
+    if (values.length === 0) return emptyState(el, opts.empty || "Nothing to show.");
+    var W = chartWidth(el, 520), m = { top: 22, right: 12, bottom: 46, left: 48 }, H = 260;
+    var svg = svgRoot(el, W, H, opts.label);
+    var domain = opts.domain || [d3.min(values), d3.max(values)], thresholds;
+    if (opts.integer) {
+      var span = domain[1] - domain[0] + 1, step = Math.max(1, Math.ceil(span / 30));
+      domain = [domain[0] - 0.5, domain[0] - 0.5 + Math.ceil(span / step) * step];
+      thresholds = d3.range(domain[0], domain[1], step);
+    } else {
+      var nb = opts.bins || 10;
+      thresholds = d3.range(nb).map(function (i) { return domain[0] + i * (domain[1] - domain[0]) / nb; });
+    }
+    var x = d3.scaleLinear().domain(domain).range([m.left, W - m.right]);
+    var bins = d3.histogram().domain(domain).thresholds(thresholds)(values);
+    var y = d3.scaleLinear().domain([0, d3.max(bins, function (b) { return b.length; }) || 1]).nice(4).range([H - m.bottom, m.top]);
+    y.ticks(4).filter(function (v) { return v === Math.floor(v); }).forEach(function (tick) {
+      svg.append("line").attr("x1", m.left).attr("x2", W - m.right).attr("y1", y(tick)).attr("y2", y(tick)).attr("stroke", t.grid);
+      svg.append("text").attr("x", m.left - 8).attr("y", y(tick) + 4).attr("text-anchor", "end").attr("fill", t.muted).text(tick);
+    });
+    function binLabel(b) {
+      if (opts.integer) {
+        var lo = Math.ceil(b.x0), hi = Math.floor(b.x1 - 1e-9);
+        return lo === hi ? String(lo) : lo + "–" + hi;
+      }
+      return b.x0.toFixed(2) + "–" + b.x1.toFixed(2);
+    }
+    var bars = svg.append("g").selectAll("path").data(bins).enter().append("path")
+      .attr("d", function (b) {
+        var w = Math.max(1, x(b.x1) - x(b.x0) - 2);
+        return b.length ? vBarPath(x(b.x0) + 1, y(0), w, y(0) - y(b.length), Math.min(4, w / 2)) : "";
+      })
+      .attr("fill", t.series[0]);
+    hover(bars, function (b) { return [(opts.xLabel || "Value") + ": " + binLabel(b), [[opts.yLabel || "Count", String(b.length)]]]; });
+    if (bins.length <= 30) {
+      svg.append("g").selectAll("text").data(bins.filter(function (b) { return b.length > 0; })).enter().append("text")
+        .attr("x", function (b) { return (x(b.x0) + x(b.x1)) / 2; }).attr("y", function (b) { return y(b.length) - 5; })
+        .attr("text-anchor", "middle").attr("fill", t.muted).attr("font-size", 11).text(function (b) { return b.length; });
+    }
+    var ticks = opts.integer ? x.ticks(8).filter(function (v) { return v === Math.floor(v) && v >= domain[0] + 0.5; }) : x.ticks(10);
+    ticks.forEach(function (tick) {
+      svg.append("text").attr("x", x(tick)).attr("y", H - m.bottom + 16).attr("text-anchor", "middle").attr("fill", t.muted)
+        .text(opts.integer ? tick : tick.toFixed(1));
+    });
+    svg.append("line").attr("x1", m.left).attr("x2", W - m.right).attr("y1", y(0)).attr("y2", y(0)).attr("stroke", t.neutral);
+    if (opts.xLabel) svg.append("text").attr("x", (m.left + W - m.right) / 2).attr("y", H - 8).attr("text-anchor", "middle").attr("fill", t.muted).text(opts.xLabel);
+    if (opts.yLabel) svg.append("text").attr("x", m.left - 36).attr("y", 12).attr("fill", t.muted).text(opts.yLabel);
+  }
+
+  // ---------------------------------------------------------------- horizontal bars (pairwise similarities)
+  // items: [{ label, value }]
+  function bars(el, items, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme();
+    if (items.length === 0) return emptyState(el, "No pairs at or above the threshold.");
+    items = items.slice().sort(function (a, b) { return b.value - a.value; });
+    // on phones the label sits on its own line above the bar
+    var W = chartWidth(el), stacked = narrow(W), rowH = stacked ? 46 : 28, barY = stacked ? 21 : 5, barH = 18;
+    var labelW = stacked ? 4 : Math.min(W * 0.45, d3.max(items, function (d) { return textWidth(clip(d.label, 48)); }) + 16);
+    var labelChars = stacked ? Math.floor((W - 12) / 6.8) : 48;
+    var m = { top: 8, right: 58, bottom: 40, left: labelW }, H = m.top + m.bottom + items.length * rowH;
+    var svg = svgRoot(el, W, H, opts.label);
+    var lo = Math.min(0, d3.min(items, function (d) { return d.value; })), hi = Math.max(d3.max(items, function (d) { return d.value; }), 1e-9);
+    var x = d3.scaleLinear().domain([lo, hi]).nice(5).range([m.left, W - m.right]);
+    x.ticks(stacked ? 3 : 5).forEach(function (tick) {
+      svg.append("line").attr("x1", x(tick)).attr("x2", x(tick)).attr("y1", m.top).attr("y2", H - m.bottom).attr("stroke", t.grid);
+      svg.append("text").attr("x", x(tick)).attr("y", H - m.bottom + 16).attr("text-anchor", "middle").attr("fill", t.muted).text(tick);
+    });
+    var rows = svg.append("g").selectAll("g").data(items).enter().append("g")
+      .attr("transform", function (d, i) { return "translate(0," + (m.top + i * rowH) + ")"; });
+    rows.append("rect").attr("x", 0).attr("width", W).attr("height", rowH).attr("fill", "transparent");
+    rows.append("path").attr("d", function (d) { return hBarPath(x(0), barY, x(d.value) - x(0), barH, 4); }).attr("fill", t.series[0]);
+    rows.append("text").attr("x", stacked ? 4 : m.left - 8).attr("y", stacked ? 14 : rowH / 2 + 4).attr("text-anchor", stacked ? "start" : "end")
+      .attr("fill", t.text).attr("paint-order", "stroke").attr("stroke", t.surface).attr("stroke-width", stacked ? 3 : 0)
+      .text(function (d) { return clip(d.label, labelChars); });
+    rows.append("text").attr("x", function (d) { return Math.max(x(d.value), x(0)) + 6; }).attr("y", barY + barH / 2 + 4).attr("fill", t.muted)
+      .text(function (d) { return fmt(d.value); });
+    hover(rows, function (d) { return [d.label, [[opts.metric || "Similarity", fmt(d.value)]]]; });
+    svg.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", m.top).attr("y2", H - m.bottom).attr("stroke", t.neutral);
+    if (opts.metric) svg.append("text").attr("x", (m.left + W - m.right) / 2).attr("y", H - 6).attr("text-anchor", "middle").attr("fill", t.muted).text(opts.metric);
+  }
+
+  // ---------------------------------------------------------------- hierarchical heatmap
+  // names: [n], matrix: n x n (row = first set of the pair), opts: { threshold, metric }
+  function heatmap(el, names, matrix, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme(), n = names.length, i, j;
+    if (n < 2) return emptyState(el, "Select at least two cluster sets.");
+    var dist = [];
+    for (i = 0; i < n; i++) { dist.push([]); for (j = 0; j < n; j++) dist[i].push(i === j ? 0 : 1 - (matrix[i][j] + matrix[j][i]) / 2); }
+    var tree = VICTOR.core.hclust(dist), order = tree.order;
+    var off = [];
+    for (i = 0; i < n; i++) for (j = 0; j < n; j++) if (i !== j) off.push(matrix[i][j]);
+    var lo = d3.min(off), hi = d3.max(off), color = sequential(lo, hi);
+    var W = chartWidth(el), dendro = narrow(W) ? 36 : 56, rowChars = narrow(W) ? 12 : 28;
+    var labelW = Math.min(200, d3.max(names, function (s) { return textWidth(clip(s, rowChars)); }) + 14);
+    var cell = Math.max(22, Math.min(72, Math.floor((W - dendro - labelW - 8) / n)));
+    var gridW = cell * n, bottom = Math.min(150, labelW * 0.75 + 20) + 46, H = dendro + gridW + bottom;
+    var svg = svgRoot(el, Math.max(W, dendro + gridW + labelW + 8), H, opts.label);
+    var pos = {};
+    order.forEach(function (leaf, k) { pos[leaf] = k; });
+    var g = svg.append("g").attr("transform", "translate(" + dendro + "," + dendro + ")");
+    var cells = [];
+    for (i = 0; i < n; i++) for (j = 0; j < n; j++) cells.push({ r: order[i], c: order[j], ri: i, ci: j });
+    var showText = cell >= 38;
+    var cg = g.selectAll("g").data(cells).enter().append("g")
+      .attr("transform", function (d) { return "translate(" + d.ci * cell + "," + d.ri * cell + ")"; });
+    cg.append("rect").attr("x", 1).attr("y", 1).attr("width", cell - 2).attr("height", cell - 2).attr("rx", 3)
+      .attr("fill", function (d) {
+        if (d.r === d.c) return t.grid;
+        if (opts.threshold !== undefined && matrix[d.r][d.c] < opts.threshold) return t.surface;
+        return color(matrix[d.r][d.c]);
+      })
+      .attr("stroke", function (d) { return d.r !== d.c && opts.threshold !== undefined && matrix[d.r][d.c] < opts.threshold ? t.grid : "none"; });
+    if (showText) {
+      cg.filter(function (d) { return d.r !== d.c && !(opts.threshold !== undefined && matrix[d.r][d.c] < opts.threshold); })
+        .append("text").attr("x", cell / 2).attr("y", cell / 2 + 4).attr("text-anchor", "middle").attr("font-size", 11)
+        .attr("fill", function (d) { return readableOn(color(matrix[d.r][d.c])); })
+        .text(function (d) { return matrix[d.r][d.c].toFixed(2); });
+    }
+    hover(cg.filter(function (d) { return d.r !== d.c; }), function (d) {
+      return [names[d.r] + " vs " + names[d.c], [[opts.metric || "Similarity", fmt(matrix[d.r][d.c])]]];
+    });
+    // labels
+    order.forEach(function (leaf, k) {
+      svg.append("text").attr("x", dendro + gridW + 8).attr("y", dendro + k * cell + cell / 2 + 4).attr("fill", t.text)
+        .text(clip(names[leaf], rowChars)).append("title").text(names[leaf]);
+      svg.append("text").attr("transform", "translate(" + (dendro + k * cell + cell / 2 + 4) + "," + (dendro + gridW + 12) + ") rotate(-40)")
+        .attr("text-anchor", "end").attr("fill", t.text).text(clip(names[leaf], narrow(W) ? 12 : 22)).append("title").text(names[leaf]);
+    });
+    // dendrograms (same tree on both axes)
+    var maxH = tree.root.height || 1;
+    function place(node) {
+      if (node.leaf !== undefined) { node.p = pos[node.leaf] * cell + cell / 2; node.h = 0; return; }
+      place(node.left); place(node.right);
+      node.p = (node.left.p + node.right.p) / 2;
+      node.h = node.height / maxH * (dendro - 10);
+    }
+    place(tree.root);
+    var topPath = "", leftPath = "";
+    (function walk(node) {
+      if (node.leaf !== undefined) return;
+      [node.left, node.right].forEach(function (child) {
+        topPath += "M" + (dendro + child.p) + "," + (dendro - 2 - child.h) + "V" + (dendro - 2 - node.h) + "H" + (dendro + node.p);
+        leftPath += "M" + (dendro - 2 - child.h) + "," + (dendro + child.p) + "H" + (dendro - 2 - node.h) + "V" + (dendro + node.p);
+        walk(child);
+      });
+    })(tree.root);
+    svg.append("path").attr("d", topPath).attr("fill", "none").attr("stroke", t.neutral).attr("stroke-width", 1.2);
+    svg.append("path").attr("d", leftPath).attr("fill", "none").attr("stroke", t.neutral).attr("stroke-width", 1.2);
+    colorBar(svg, dendro, H - 34, Math.min(220, gridW), lo, hi, t, "low to high");
+  }
+
+  // ---------------------------------------------------------------- sankey
+  // Layout adapted from the d3 sankey plugin by Mike Bostock (BSD 3-Clause licence).
+  function sankeyLayout(nodes, links, size, nodeWidth, nodePadding, iterations) {
+    nodes.forEach(function (node) { node.sourceLinks = []; node.targetLinks = []; });
+    links.forEach(function (link) {
+      link.source = nodes[link.source];
+      link.target = nodes[link.target];
+      link.source.sourceLinks.push(link);
+      link.target.targetLinks.push(link);
+    });
+    function value(link) { return link.value; }
+    function center(node) { return node.y + node.dy / 2; }
+    nodes.forEach(function (node) { node.value = Math.max(d3.sum(node.sourceLinks, value), d3.sum(node.targetLinks, value)); });
+    // breadths
+    var remaining = nodes.filter(function (n) { return n.sourceLinks.length + n.targetLinks.length > 0; }), x = 0, next;
+    var used = remaining.slice();
+    while (remaining.length) {
+      next = [];
+      remaining.forEach(function (node) {
+        node.x = x;
+        node.dx = nodeWidth;
+        node.sourceLinks.forEach(function (link) { if (next.indexOf(link.target) < 0) next.push(link.target); });
+      });
+      remaining = next;
+      ++x;
+    }
+    used.forEach(function (node) { if (!node.sourceLinks.length) node.x = x - 1; });
+    var kx = x > 1 ? (size[0] - nodeWidth) / (x - 1) : 0;
+    used.forEach(function (node) { node.x *= kx; });
+    // depths
+    var byBreadth = d3.nest().key(function (d) { return d.x; }).sortKeys(function (a, b) { return a - b; }).entries(used)
+      .map(function (d) { return d.values; });
+    var ky = d3.min(byBreadth, function (col) { return (size[1] - (col.length - 1) * nodePadding) / d3.sum(col, value); });
+    byBreadth.forEach(function (col) { col.forEach(function (node, i) { node.y = i; node.dy = node.value * ky; }); });
+    links.forEach(function (link) { link.dy = link.value * ky; });
+    function resolveCollisions() {
+      byBreadth.forEach(function (col) {
+        var node, dy, y0 = 0, i;
+        col.sort(function (a, b) { return a.y - b.y; });
+        for (i = 0; i < col.length; ++i) {
+          node = col[i];
+          dy = y0 - node.y;
+          if (dy > 0) node.y += dy;
+          y0 = node.y + node.dy + nodePadding;
+        }
+        dy = y0 - nodePadding - size[1];
+        if (dy > 0) {
+          y0 = node.y -= dy;
+          for (i = col.length - 2; i >= 0; --i) {
+            node = col[i];
+            dy = node.y + node.dy + nodePadding - y0;
+            if (dy > 0) node.y -= dy;
+            y0 = node.y;
+          }
+        }
+      });
+    }
+    resolveCollisions();
+    for (var alpha = 1; iterations > 0; --iterations) {
+      alpha *= 0.99;
+      byBreadth.slice().reverse().forEach(function (col) {
+        col.forEach(function (node) {
+          if (node.sourceLinks.length) {
+            var yv = d3.sum(node.sourceLinks, function (l) { return center(l.target) * l.value; }) / d3.sum(node.sourceLinks, value);
+            node.y += (yv - center(node)) * alpha;
+          }
+        });
+      });
+      resolveCollisions();
+      byBreadth.forEach(function (col) {
+        col.forEach(function (node) {
+          if (node.targetLinks.length) {
+            var yv = d3.sum(node.targetLinks, function (l) { return center(l.source) * l.value; }) / d3.sum(node.targetLinks, value);
+            node.y += (yv - center(node)) * alpha;
+          }
+        });
+      });
+      resolveCollisions();
+    }
+    used.forEach(function (node) {
+      node.sourceLinks.sort(function (a, b) { return a.target.y - b.target.y; });
+      node.targetLinks.sort(function (a, b) { return a.source.y - b.source.y; });
+    });
+    used.forEach(function (node) {
+      var sy = 0, ty = 0;
+      node.sourceLinks.forEach(function (link) { link.sy = sy; sy += link.dy; });
+      node.targetLinks.forEach(function (link) { link.ty = ty; ty += link.dy; });
+    });
+    return used;
+  }
+
+  // relative thickness in [0.1, 1], as in the original VICTOR
+  function relativeWeights(pairs) {
+    var lo = d3.min(pairs, function (p) { return p.value; }), hi = d3.max(pairs, function (p) { return p.value; });
+    return pairs.map(function (p) { return hi > lo ? 0.1 + 0.9 * (p.value - lo) / (hi - lo) : 0.5; });
+  }
+
+  // pairs: [{ i, j, value }] with i < j
+  function sankey(el, names, pairs, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme();
+    if (pairs.length === 0) return emptyState(el, "No pairs at or above the threshold.");
+    var W = chartWidth(el), H = Math.max(360, Math.min(620, 140 + names.length * 60)), m = { top: 16, right: narrow(W) ? 84 : 150, bottom: 16, left: 12 };
+    var svg = svgRoot(el, W, H, opts.label);
+    var weights = relativeWeights(pairs);
+    var nodes = names.map(function (name) { return { name: name }; });
+    var links = pairs.map(function (p, k) { return { source: p.i, target: p.j, value: weights[k], original: p.value }; });
+    var used = sankeyLayout(nodes, links, [W - m.left - m.right, H - m.top - m.bottom], 16, 22, 60);
+    var color = sequential(d3.min(pairs, function (p) { return p.value; }), d3.max(pairs, function (p) { return p.value; }));
+    var g = svg.append("g").attr("transform", "translate(" + m.left + "," + m.top + ")");
+    function linkPath(d) {
+      var x0 = d.source.x + d.source.dx, x1 = d.target.x, xi = d3.interpolateNumber(x0, x1), x2 = xi(0.5), x3 = xi(0.5),
+          y0 = d.source.y + d.sy + d.dy / 2, y1 = d.target.y + d.ty + d.dy / 2;
+      return "M" + x0 + "," + y0 + "C" + x2 + "," + y0 + " " + x3 + "," + y1 + " " + x1 + "," + y1;
+    }
+    var paths = g.append("g").selectAll("path").data(links.slice().sort(function (a, b) { return b.dy - a.dy; })).enter().append("path")
+      .attr("d", linkPath).attr("fill", "none").attr("stroke", function (d) { return color(d.original); })
+      .attr("stroke-width", function (d) { return Math.max(1.5, d.dy); }).attr("stroke-opacity", 0.6);
+    hover(paths, function (d) { return [d.source.name + " vs " + d.target.name, [[opts.metric || "Similarity", fmt(d.original)]]]; },
+      function () { this.setAttribute("stroke-opacity", 0.95); }, function () { this.setAttribute("stroke-opacity", 0.6); });
+    var ng = g.append("g").selectAll("g").data(used).enter().append("g")
+      .attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
+    ng.append("rect").attr("width", 16).attr("height", function (d) { return Math.max(d.dy, 2); }).attr("rx", 3).attr("fill", t.muted);
+    ng.append("text").attr("x", 22).attr("y", function (d) { return Math.max(d.dy, 2) / 2 + 4; }).attr("fill", t.text)
+      .text(function (d) { return clip(d.name, narrow(W) ? 11 : 20); }).append("title").text(function (d) { return d.name; });
+  }
+
+  // ---------------------------------------------------------------- network of cluster sets
+  // pairs: [{ i, j, value }], opts: { layout: "force" | "circle" | "grid", metric }
+  function network(el, names, pairs, opts) {
+    clear(el, "sets");
+    opts = opts || {};
+    var t = theme();
+    if (names.length === 0) return emptyState(el, "Select at least two cluster sets.");
+    var W = chartWidth(el), H = narrow(W) ? Math.round(W * 1.15) : Math.max(420, Math.min(640, W * 0.62));
+    var svg = svgRoot(el, W, H, opts.label);
+    var weights = pairs.length ? relativeWeights(pairs) : [];
+    var nodes = names.map(function (name, i) { return { id: i, name: name }; });
+    var links = pairs.map(function (p, k) { return { source: nodes[p.i], target: nodes[p.j], value: p.value, rel: weights[k] }; });
+    var lg = svg.append("g"), ng = svg.append("g");
+    var line = lg.selectAll("line").data(links).enter().append("line")
+      .attr("stroke", t.series[0]).attr("stroke-opacity", 0.55).attr("stroke-linecap", "round")
+      .attr("stroke-width", function (d) { return 1.5 + d.rel * 9; });
+    hover(line, function (d) { return [d.source.name + " vs " + d.target.name, [[opts.metric || "Similarity", fmt(d.value)]]]; },
+      function () { this.setAttribute("stroke-opacity", 0.95); }, function () { this.setAttribute("stroke-opacity", 0.55); });
+    var node = ng.selectAll("g").data(nodes).enter().append("g").attr("cursor", "grab");
+    node.append("circle").attr("r", 11).attr("fill", t.surface).attr("stroke", t.text).attr("stroke-width", 2);
+    node.append("text").attr("x", narrow(W) ? 0 : 16).attr("y", narrow(W) ? 27 : 4).attr("text-anchor", narrow(W) ? "middle" : "start")
+      .attr("fill", t.text).attr("font-size", 13)
+      .attr("paint-order", "stroke").attr("stroke", t.surface).attr("stroke-width", 3)
+      .text(function (d) { return clip(d.name, narrow(W) ? 12 : 24); });
+    function draw() {
+      var padX = narrow(W) ? 44 : 16, padBottom = narrow(W) ? 36 : 16;
+      nodes.forEach(function (d) { d.x = Math.max(padX, Math.min(W - padX, d.x)); d.y = Math.max(16, Math.min(H - padBottom, d.y)); });
+      line.attr("x1", function (d) { return d.source.x; }).attr("y1", function (d) { return d.source.y; })
+        .attr("x2", function (d) { return d.target.x; }).attr("y2", function (d) { return d.target.y; });
+      node.attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
+    }
+    var layout = opts.layout || "force", sim = null;
+    if (layout === "circle") {
+      var r = Math.min(W, H) / 2 - (narrow(W) ? 50 : 70);
+      nodes.forEach(function (d, i) { var a = 2 * Math.PI * i / nodes.length - Math.PI / 2; d.x = W / 2 + r * Math.cos(a); d.y = H / 2 + r * Math.sin(a); });
+      draw();
+    } else if (layout === "grid") {
+      var cols = Math.ceil(Math.sqrt(nodes.length)), rowsN = Math.ceil(nodes.length / cols);
+      nodes.forEach(function (d, i) { d.x = W * ((i % cols) + 0.5) / cols; d.y = H * (Math.floor(i / cols) + 0.5) / rowsN; });
+      draw();
+    } else {
+      nodes.forEach(function (d, i) { var a = 2 * Math.PI * i / nodes.length; d.x = W / 2 + 120 * Math.cos(a); d.y = H / 2 + 120 * Math.sin(a); });
+      sim = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).distance(function (d) { return (narrow(W) ? 0.5 : 1) * (300 - 190 * d.rel); }).strength(function (d) { return 0.15 + 0.6 * d.rel; }))
+        .force("charge", d3.forceManyBody().strength(narrow(W) ? -260 : -650))
+        .force("center", d3.forceCenter(W / 2, H / 2))
+        .force("collide", d3.forceCollide(28))
+        .on("tick", draw);
+      activeSimulations.sets = sim;
+    }
+    node.call(d3.drag()
+      .on("start", function (d) { if (sim) { if (!d3.event.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; } })
+      .on("drag", function (d) {
+        if (sim) { d.fx = d3.event.x; d.fy = d3.event.y; } else { d.x = d3.event.x; d.y = d3.event.y; draw(); }
+      })
+      .on("end", function (d) { if (sim) { if (!d3.event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; } }));
+  }
+
+  // ---------------------------------------------------------------- circos (chord diagram)
+  function chord(el, names, pairs, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme(), n = names.length;
+    var positive = pairs.filter(function (p) { return p.value > 0; });
+    if (positive.length === 0) return emptyState(el, "No pairs at or above the threshold.");
+    var W = chartWidth(el), size = Math.min(W, 640), labelChars = narrow(W) ? 9 : 22;
+    var labelPad = Math.min(size * 0.26, d3.max(names, function (s) { return textWidth(clip(s, labelChars)); }) + 14);
+    var outer = size / 2 - labelPad, inner = outer - 14;
+    var svg = svgRoot(el, W, size + (narrow(W) ? 40 : 0), opts.label);
+    var matrix = d3.range(n).map(function () { return new Array(n).fill(0); });
+    positive.forEach(function (p) { matrix[p.i][p.j] = p.value; matrix[p.j][p.i] = p.value; });
+    var chords = d3.chord().padAngle(0.05).sortSubgroups(d3.descending)(matrix);
+    var color = sequential(d3.min(positive, function (p) { return p.value; }), d3.max(positive, function (p) { return p.value; }));
+    var g = svg.append("g").attr("transform", "translate(" + W / 2 + "," + size / 2 + ")");
+    var ribbon = d3.ribbon().radius(inner - 2), arc = d3.arc().innerRadius(inner).outerRadius(outer);
+    var ribbons = g.append("g").selectAll("path").data(chords).enter().append("path")
+      .attr("d", ribbon).attr("fill", function (d) { return color(matrix[d.source.index][d.target.index]); })
+      .attr("fill-opacity", 0.78).attr("stroke", t.surface).attr("stroke-width", 1);
+    hover(ribbons, function (d) {
+      return [names[d.source.index] + " vs " + names[d.target.index], [[opts.metric || "Similarity", fmt(matrix[d.source.index][d.target.index])]]];
+    }, function () { this.setAttribute("fill-opacity", 1); }, function () { this.setAttribute("fill-opacity", 0.78); });
+    var groups = g.append("g").selectAll("g").data(chords.groups.filter(function (d) { return d.value > 0; })).enter().append("g");
+    var arcs = groups.append("path").attr("d", arc).attr("fill", t.muted).attr("stroke", t.surface).attr("stroke-width", 1);
+    hover(arcs, function (d) { return [names[d.index], [["Sum of shown similarities", fmt(d.value)]]]; },
+      function (d) { ribbons.attr("fill-opacity", function (r) { return r.source.index === d.index || r.target.index === d.index ? 0.95 : 0.12; }); },
+      function () { ribbons.attr("fill-opacity", 0.78); });
+    groups.append("text")
+      .each(function (d) { d.angle = (d.startAngle + d.endAngle) / 2; })
+      .attr("dy", "0.35em").attr("fill", t.text)
+      .attr("transform", function (d) {
+        return "rotate(" + (d.angle * 180 / Math.PI - 90) + ") translate(" + (outer + 8) + ")" + (d.angle > Math.PI ? " rotate(180)" : "");
+      })
+      .attr("text-anchor", function (d) { return d.angle > Math.PI ? "end" : "start"; })
+      .text(function (d) { return clip(names[d.index], labelChars); });
+    colorBar(svg, 12, size - 34 + (narrow(W) ? 40 : 0), narrow(W) ? 110 : 160, d3.min(positive, function (p) { return p.value; }), d3.max(positive, function (p) { return p.value; }), t, "low to high");
+  }
+
+  // ---------------------------------------------------------------- network coloured by cluster (canvas)
+  // net: parsed edge list, quality: result of core.clusterQuality, clusters: [{ name, members }]
+  // Returns legend items [{ label, color }].
+  function graph(el, net, quality, clusters) {
+    clear(el, "graph");
+    var t = theme(), N = net.nodes.length;
+    if (N > 3000) { emptyState(el, "The network has " + N + " nodes; the drawing is skipped above 3000 nodes. The table and histogram still cover all of it."); return []; }
+    // the 8 largest clusters get a colour, the rest share a neutral one
+    var ranked = quality.rows.map(function (r, i) { return { i: i, size: r.inNetwork }; })
+      .filter(function (r) { return r.size > 0; }).sort(function (a, b) { return b.size - a.size; });
+    var colorOf = {}, legendItems = [];
+    ranked.slice(0, 8).forEach(function (r, k) { colorOf[r.i] = t.series[k]; legendItems.push({ label: clusters[r.i].name + " (" + r.size + ")", color: t.series[k] }); });
+    if (ranked.length > 8 || quality.unassignedNodes > 0) legendItems.push({ label: "Other clusters / unassigned", color: t.neutral });
+    var W = chartWidth(el), H = Math.max(380, Math.min(560, W * 0.7)), ratio = global.devicePixelRatio || 1;
+    var canvas = document.createElement("canvas");
+    canvas.width = W * ratio; canvas.height = H * ratio;
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", "Network coloured by cluster");
+    el.appendChild(canvas);
+    var ctx = canvas.getContext("2d");
+    ctx.scale(ratio, ratio);
+    var nodes = net.nodes.map(function (name, i) { return { id: i, name: name, cluster: quality.membership[i] }; });
+    var links = net.edges.map(function (e) { return { source: e.s, target: e.t, w: e.w }; });
+    var maxW = d3.max(net.edges, function (e) { return e.w; }) || 1, radius = N > 600 ? 3 : N > 150 ? 4 : 6;
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      ctx.strokeStyle = t.neutral;
+      ctx.globalAlpha = 0.5;
+      links.forEach(function (l) {
+        ctx.lineWidth = 0.6 + 2 * l.w / maxW;
+        ctx.beginPath(); ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+      nodes.forEach(function (d) {
+        ctx.beginPath(); ctx.arc(d.x, d.y, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = colorOf[d.cluster] || t.neutral; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = t.surface; ctx.stroke();
+      });
+    }
+    var sim = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links).distance(N > 300 ? 18 : 34).strength(0.6))
+      .force("charge", d3.forceManyBody().strength(N > 300 ? -18 : -60))
+      .force("x", d3.forceX(W / 2).strength(0.05)).force("y", d3.forceY(H / 2).strength(0.07))
+      .on("tick", function () {
+        nodes.forEach(function (d) { d.x = Math.max(8, Math.min(W - 8, d.x)); d.y = Math.max(8, Math.min(H - 8, d.y)); });
+        draw();
+      });
+    activeSimulations.graph = sim;
+    canvas.addEventListener("mousemove", function (e) {
+      var rect = canvas.getBoundingClientRect(), hit = sim.find(e.clientX - rect.left, e.clientY - rect.top, 12);
+      if (hit) showTip(e, hit.name, [["Cluster", hit.cluster >= 0 ? clusters[hit.cluster].name : "none"]]); else hideTip();
+    });
+    canvas.addEventListener("mouseleave", hideTip);
+    return legendItems;
+  }
+
+  // ---------------------------------------------------------------- export
+  function download(href, filename) {
+    var a = document.createElement("a");
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function serialize(svg) {
+    var clone = svg.cloneNode(true), t = theme();
+    var bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    bg.setAttribute("width", "100%");
+    bg.setAttribute("height", "100%");
+    bg.setAttribute("fill", t.surface);
+    clone.insertBefore(bg, clone.firstChild);
+    return new XMLSerializer().serializeToString(clone);
+  }
+
+  function exportSvg(el, filename) {
+    var svg = el.querySelector("svg");
+    if (!svg) return false;
+    var blob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + serialize(svg)], { type: "image/svg+xml" });
+    var url = URL.createObjectURL(blob);
+    download(url, filename);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    return true;
+  }
+
+  function exportPng(el, filename, scale) {
+    var svg = el.querySelector("svg");
+    if (!svg) return false;
+    scale = scale || 3;
+    var w = +svg.getAttribute("width"), h = +svg.getAttribute("height"), img = new Image();
+    img.onload = function () {
+      var canvas = document.createElement("canvas");
+      canvas.width = w * scale;
+      canvas.height = h * scale;
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      download(canvas.toDataURL("image/png"), filename);
+    };
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(serialize(svg));
+    return true;
+  }
+
+  VICTOR.charts = {
+    theme: theme, sequential: sequential, readableOn: readableOn, fmt: fmt,
+    columns: columns, histogram: histogram, bars: bars, heatmap: heatmap, sankey: sankey,
+    network: network, chord: chord, graph: graph,
+    exportSvg: exportSvg, exportPng: exportPng, download: download
+  };
+})(window);

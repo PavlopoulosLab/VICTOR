@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<link rel="stylesheet" href="helppages_css.css">
+
+<body>
+<p><b>Additional cluster set comparison metrics</b><br>
+Besides the ten metrics described in the Metrics tab, VICTOR offers twelve more. All of them are similarities: higher values mean more similar cluster sets. In what follows, C and C' are two cluster sets of the same n objects, M is their confusion matrix with elements m<sub>ij</sub>, H is the entropy and I the Mutual Information. For the asymmetric metrics, the first cluster set of a pair ("A" in "A vs B") is C.</p>
+
+<p><b>Counting Pairs</b></p>
+<p><b>Rand Index</b> (rand). The fraction of object pairs on which the two cluster sets agree (co-clustered in both or separated in both). Ranges in [0, 1]. It approaches 1 when the number of clusters is large compared to the number of objects, so the Adjusted Rand Index is usually preferable.</p>
+
+<p><b>Set Overlaps / Matching</b></p>
+<p><b>F-Measure</b> (f). Each cluster of C is matched to the cluster of C' with which it has the highest F-score (harmonic mean of precision and recall), and these scores are averaged, weighted by cluster size. Asymmetric. Calculated by mclustcomp.</p>
+<p><b>Meila-Heckerman Measure</b> (mhm). Each cluster of one set is matched to its best-overlapping cluster of the other set and the overlaps are summed and divided by n. Asymmetric. Calculated by mclustcomp.</p>
+<p><b>Van Dongen Measure, normalized and inverted</b> (vdm_norm). The Van Dongen distance is 2n &minus; &Sigma;<sub>i</sub> max<sub>j</sub> m<sub>ij</sub> &minus; &Sigma;<sub>j</sub> max<sub>i</sub> m<sub>ij</sub>. VICTOR divides it by 2n and subtracts the result from 1, so the value is in (0, 1] and 1 describes identical cluster sets.</p>
+<p><b>B-Cubed Precision, Recall and F-Score</b> (bcubed_p, bcubed_r, bcubed_f). Element-level scores. For each object, precision is the fraction of the objects in its C' cluster that also share its C cluster, and recall is the fraction of the objects in its C cluster that also share its C' cluster. Both are averaged over all objects: precision = (1/n) &Sigma;<sub>ij</sub> m<sub>ij</sub><sup>2</sup> / |C'<sub>j</sub>| and recall = (1/n) &Sigma;<sub>ij</sub> m<sub>ij</sub><sup>2</sup> / |C<sub>i</sub>|. The F-Score is their harmonic mean and is symmetric. All range in (0, 1].</p>
+
+<p><b>Mutual Information</b></p>
+<p><b>Normalized Mutual Information by Danon</b> (nmi3). A third normalization of the Mutual Information, calculated by mclustcomp.</p>
+<p><b>Adjusted Mutual Information</b> (ami). The Mutual Information corrected for chance: AMI = (I &minus; E[I]) / (&frac12;(H(C) + H(C')) &minus; E[I]), where E[I] is the Mutual Information expected between random cluster sets with the same cluster sizes. It is 1 for identical cluster sets and around 0 for unrelated ones (it can be slightly negative). Prefer it to the Normalized Mutual Information when the compared cluster sets have very different numbers of clusters.</p>
+<p><b>Variation of Information, normalized by log n and inverted</b> (vi_norm). VI = H(C) + H(C') &minus; 2I, divided by its upper bound log n and subtracted from 1. It differs from the Normalized Variation of Information of the Metrics tab only in the normalization.</p>
+<p><b>Homogeneity and Completeness</b> (homogeneity, completeness). Homogeneity = I / H(C) is 1 when every cluster of C' lies inside a single cluster of C. Completeness = I / H(C') is 1 when every cluster of C lies inside a single cluster of C'. Together they show whether one cluster set is a refinement of the other. Their harmonic mean (the V-Measure) equals the Normalized Mutual Information by Fred and Jain, which is why it is not listed separately.</p>
+
+<p><b>Cluster quality on a network (Conductance tab)</b><br>
+After executing the Conductance tab, the Cluster Quality sub tab lists for every cluster: the number of its objects found in the network, the number of internal edges and cut edges, its <b>conductance</b> (cut weight divided by the smaller of the volumes of the cluster and of the rest of the network), its <b>internal density</b> (internal edges divided by the number of possible internal edges) and its <b>cut ratio</b> (cut edges divided by the number of possible edges between the cluster and the rest of the network). Above the table, the <b>modularity</b> of the cluster set on the network and its <b>coverage</b> (fraction of the edge weight that lies inside clusters) are reported. Duplicate edges are merged (weights summed) and self-loops are removed before the calculation.</p>
+<br/>
+</body>
+</html>

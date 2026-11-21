@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Only this site's own scripts and styles may run, and the page may not contact any server. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>VICTOR: comparing cluster sets</title>
+<meta name="description" content="VICTOR is a visual analytics web application for comparing cluster sets. It runs entirely in your browser.">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="css/victor.css">
+<script src="js/theme.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <h1 class="banner">
+    <svg class="logo" viewBox="0 0 720 112" role="img" aria-label="VICTOR" xmlns="http://www.w3.org/2000/svg">
+      <g class="lg-art">
+        <!-- V: overlapping sets -->
+        <circle class="lg-f1" cx="42" cy="44" r="34"/><circle class="lg-f3" cx="76" cy="44" r="34"/><circle class="lg-f5" cx="59" cy="72" r="34"/>
+        <circle class="lg-dot" cx="24" cy="34" r="3.5"/><circle class="lg-dot" cx="94" cy="30" r="3.5"/><circle class="lg-dot" cx="52" cy="50" r="3.5"/>
+        <circle class="lg-dot" cx="68" cy="56" r="3.5"/><circle class="lg-dot" cx="60" cy="92" r="3.5"/><circle class="lg-dot" cx="84" cy="78" r="3.5"/>
+        <!-- I: heatmap -->
+        <g transform="translate(128,10)">
+          <rect class="lg-s4" x="0" y="0" width="18" height="18"/><rect class="lg-s2" x="18" y="0" width="18" height="18"/><rect class="lg-s1" x="36" y="0" width="54" height="18"/>
+          <rect class="lg-s2" x="0" y="18" width="18" height="18"/><rect class="lg-s4" x="18" y="18" width="18" height="18"/><rect class="lg-s1" x="36" y="18" width="54" height="18"/>
+          <rect class="lg-s1" x="0" y="36" width="36" height="18"/><rect class="lg-s4" x="36" y="36" width="18" height="18"/><rect class="lg-s2" x="54" y="36" width="18" height="18"/><rect class="lg-s1" x="72" y="36" width="18" height="18"/>
+          <rect class="lg-s1" x="0" y="54" width="36" height="18"/><rect class="lg-s2" x="36" y="54" width="18" height="18"/><rect class="lg-s4" x="54" y="54" width="18" height="18"/><rect class="lg-s3" x="72" y="54" width="18" height="18"/>
+          <rect class="lg-s1" x="0" y="72" width="54" height="18"/><rect class="lg-s1" x="54" y="72" width="18" height="18"/><rect class="lg-s3" x="54" y="72" width="18" height="18"/><rect class="lg-s4" x="72" y="72" width="18" height="18"/>
+        </g>
+        <!-- C: sankey -->
+        <g transform="translate(244,8)">
+          <path class="lg-band" d="M8,6 C56,6 56,34 104,34 L104,58 C56,58 56,30 8,30 Z"/>
+          <path class="lg-band lg-band2" d="M8,52 C56,52 56,66 104,66 L104,92 C56,92 56,86 8,86 Z"/>
+          <path class="lg-band lg-band3" d="M8,34 C56,34 56,4 104,4 L104,16 C56,16 56,46 8,46 Z"/>
+          <rect class="lg-node" x="2" y="4" width="7" height="44" rx="2"/><rect class="lg-node" x="2" y="52" width="7" height="36" rx="2"/>
+          <rect class="lg-node" x="103" y="2" width="7" height="58" rx="2"/><rect class="lg-node" x="103" y="64" width="7" height="30" rx="2"/>
+        </g>
+        <!-- T: network -->
+        <g transform="translate(366,6)">
+          <g class="lg-edge">
+            <line x1="22" y1="14" x2="60" y2="24"/><line x1="22" y1="14" x2="10" y2="50"/><line x1="10" y1="50" x2="30" y2="84"/><line x1="60" y1="24" x2="30" y2="84"/>
+            <line x1="60" y1="24" x2="66" y2="66"/><line x1="10" y1="50" x2="66" y2="66"/><line x1="60" y1="24" x2="104" y2="44"/><line class="lg-thick" x1="104" y1="44" x2="98" y2="92"/>
+            <line class="lg-thick" x1="22" y1="14" x2="30" y2="84"/><line x1="66" y1="66" x2="104" y2="44"/>
+          </g>
+          <circle class="lg-vertex" cx="22" cy="14" r="8"/><circle class="lg-vertex" cx="60" cy="24" r="8"/><circle class="lg-vertex" cx="10" cy="50" r="8"/>
+          <circle class="lg-vertex" cx="30" cy="84" r="8"/><circle class="lg-vertex" cx="66" cy="66" r="8"/><circle class="lg-vertex" cx="104" cy="44" r="8"/><circle class="lg-vertex" cx="98" cy="92" r="8"/>
+        </g>
+        <!-- O: circos -->
+        <g transform="translate(540,56)">
+          <path class="lg-f1" d="M-44,-8 Q0,0 30,-34 A46,46 0 0 1 44,-12 Q0,0 -38,26 A46,46 0 0 1 -44,-8 Z"/>
+          <path class="lg-f5" d="M-20,-41 Q0,0 22,40 A46,46 0 0 1 -6,45 Q0,0 -36,-28 A46,46 0 0 1 -20,-41 Z"/>
+          <path class="lg-f3" d="M6,-45 Q0,0 44,14 A46,46 0 0 1 34,31 Q0,0 -8,-45 A46,46 0 0 1 6,-45 Z"/>
+          <circle class="lg-ring lg-r1" r="49" pathLength="100" stroke-dasharray="22 78" stroke-dashoffset="0"/>
+          <circle class="lg-ring lg-r2" r="49" pathLength="100" stroke-dasharray="14 86" stroke-dashoffset="-24"/>
+          <circle class="lg-ring lg-r3" r="49" pathLength="100" stroke-dasharray="18 82" stroke-dashoffset="-40"/>
+          <circle class="lg-ring lg-r4" r="49" pathLength="100" stroke-dasharray="20 80" stroke-dashoffset="-60"/>
+          <circle class="lg-ring lg-r5" r="49" pathLength="100" stroke-dasharray="16 84" stroke-dashoffset="-82"/>
+        </g>
+        <!-- R: bar plot -->
+        <g transform="translate(608,6)">
+          <path class="lg-bar" d="M4,98 V8 a3,3 0 0 1 3,-3 h8 a3,3 0 0 1 3,3 V98 Z"/><path class="lg-bar" d="M22,98 V30 a3,3 0 0 1 3,-3 h8 a3,3 0 0 1 3,3 V98 Z"/>
+          <path class="lg-bar" d="M40,98 V58 a3,3 0 0 1 3,-3 h8 a3,3 0 0 1 3,3 V98 Z"/><path class="lg-bar" d="M58,98 V72 a3,3 0 0 1 3,-3 h8 a3,3 0 0 1 3,3 V98 Z"/>
+          <path class="lg-bar" d="M76,98 V78 a3,3 0 0 1 3,-3 h8 a3,3 0 0 1 3,3 V98 Z"/><path class="lg-bar" d="M94,98 V88 a3,3 0 0 1 3,-3 h8 a3,3 0 0 1 3,3 V98 Z"/>
+          <line class="lg-axis" x1="0" y1="99" x2="110" y2="99"/>
+        </g>
+      </g>
+      <g class="lg-letters" aria-hidden="true">
+        <text x="59" y="80">V</text><text x="173" y="80">I</text><text x="299" y="80">C</text><text x="421" y="80">T</text><text x="540" y="80">O</text><text x="663" y="80">R</text>
+      </g>
+    </svg>
+  </h1>
+  <p class="tagline">Visual analytics for comparing cluster sets</p>
+  <span class="spacer"></span>
+  <button class="btn small" id="themeToggle" type="button" aria-pressed="false">Dark theme</button>
+</header>
+<nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
+  <button role="tab" data-tab="files" aria-selected="true">Files <span class="count" id="countSets">0</span></button>
+  <button role="tab" data-tab="compare" aria-selected="false">Compare</button>
+  <button role="tab" data-tab="visualize" aria-selected="false">Visualize</button>
+  <button role="tab" data-tab="quality" aria-selected="false">Network quality</button>
+  <button role="tab" data-tab="help" aria-selected="false">Help</button>
+</nav>
+
+<main>
+
+  <!-- ============================================================ FILES -->
+  <section class="tab active" id="tab-files" role="tabpanel">
+    <div class="layout">
+      <aside class="panel">
+        <section>
+          <h2>Cluster set files</h2>
+          <label class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" multiple accept=".txt,.tsv,.tab,text/plain,text/tab-separated-values">
+            <strong>Choose files or drop them here</strong>
+            One file per clustering result
+          </label>
+          <p class="hint">Two tab-separated columns per line: cluster name, then comma-separated object names. Files stay in your browser; nothing is uploaded.</p>
+        </section>
+        <section>
+          <h2>Examples</h2>
+          <button class="btn" id="exampleArtificial">Seven cluster sets (A to G)</button>
+          <button class="btn" id="exampleFilter">Three sets that need filtering</button>
+          <button class="btn" id="exampleYeast">Four algorithms, yeast proteins</button>
+        </section>
+        <section>
+          <h2>Filters</h2>
+          <div class="field">
+            <span>Cluster size from</span>
+            <input type="number" id="sizeMin" min="1" value="1" aria-label="Minimum cluster size">
+            <span>to</span>
+            <input type="number" id="sizeMax" min="1" value="1" aria-label="Maximum cluster size">
+          </div>
+          <p class="hint">Clusters outside this range are dropped from the selected sets.</p>
+          <label class="check"><input type="radio" name="filterMode" value="none" checked> <span>Keep all objects</span></label>
+          <label class="check"><input type="radio" name="filterMode" value="intersection"> <span><b>Intersection</b>: keep only objects present in every selected set</span></label>
+          <label class="check"><input type="radio" name="filterMode" value="superset"> <span><b>Superset</b>: add a singleton cluster for each object a set is missing</span></label>
+          <button class="btn small" id="resetFilters">Reset filters</button>
+        </section>
+      </aside>
+
+      <div class="content">
+        <div class="empty" id="filesEmpty">
+          <h2>Compare the results of different clusterings</h2>
+          <p>Load two or more cluster set files to see how similar they are, using 27 comparison metrics and five kinds of plots.</p>
+          <div class="actions">
+            <button class="btn primary" id="emptyExample">Load the example cluster sets</button>
+          </div>
+        </div>
+
+        <div id="filesBody" hidden class="content">
+          <div class="notice" id="readiness" role="status"></div>
+          <div id="fileWarnings"></div>
+          <div class="table-scroll">
+            <table id="setsTable">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="selectAll" aria-label="Select all cluster sets"></th>
+                  <th>Cluster set</th>
+                  <th class="num">Clusters</th>
+                  <th class="num">Objects</th>
+                  <th class="num">Clusters after filters</th>
+                  <th class="num">Objects after filters</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="grid2">
+            <div class="card">
+              <header><h3>Number of clusters</h3><p>Selected sets</p></header>
+              <div class="chart" id="chartClusters"></div>
+            </div>
+            <div class="card">
+              <header><h3>Number of objects</h3><p>Sets must match here to be compared</p></header>
+              <div class="chart" id="chartObjects"></div>
+            </div>
+          </div>
+          <div class="card">
+            <header>
+              <h3>Inspect a cluster set</h3>
+              <div class="toolbar">
+                <select id="inspectSet" aria-label="Cluster set to inspect"></select>
+                <div class="segmented" id="inspectStage" role="group" aria-label="Data stage">
+                  <button data-stage="raw" aria-pressed="false">As loaded</button>
+                  <button data-stage="filtered" aria-pressed="true">After filters</button>
+                </div>
+              </div>
+            </header>
+            <div class="chart" id="chartSizes"></div>
+            <div class="table-scroll mt12">
+              <table id="inspectTable">
+                <thead><tr><th>Cluster</th><th class="num">Objects</th><th>Members</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ COMPARE -->
+  <section class="tab" id="tab-compare" role="tabpanel">
+    <div class="layout">
+      <aside class="panel">
+        <section>
+          <h2>Metrics</h2>
+          <div class="toolbar">
+            <button class="btn small" id="metricsAll">All</button>
+            <button class="btn small" id="metricsNone">None</button>
+            <button class="btn small" id="metricsDefault">Original ten</button>
+          </div>
+          <div id="metricList"></div>
+        </section>
+      </aside>
+      <div class="content">
+        <div class="notice" id="compareMessage" role="status"></div>
+        <div id="compareBody" hidden class="content">
+          <div class="card">
+            <header>
+              <h3>Pairwise similarity</h3>
+              <div class="toolbar">
+                <p>Shading is relative within each row. Higher means more similar.</p>
+                <button class="btn small" id="downloadCsv">Download CSV</button>
+              </div>
+            </header>
+            <div class="table-scroll"><table id="resultsTable"></table></div>
+            <p class="hint" id="asymmetricNote" class="mt8"></p>
+          </div>
+          <div class="card">
+            <header>
+              <h3>Maximum cluster match</h3>
+              <div class="toolbar">
+                <select id="matchA" aria-label="First cluster set"></select>
+                <span>vs</span>
+                <select id="matchB" aria-label="Second cluster set"></select>
+                <button class="btn small" id="downloadMatchCsv">Download CSV</button>
+              </div>
+            </header>
+            <p class="hint mb8">Each cluster of the first set is paired with the cluster of the second set it shares the most objects with, largest overlap first.</p>
+            <div class="table-scroll">
+              <table id="matchTable">
+                <thead><tr><th id="matchHeadA">A</th><th id="matchHeadB">B</th><th class="num">Shared objects</th><th class="num">Size in A</th><th class="num">Size in B</th><th class="num">Jaccard</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ VISUALIZE -->
+  <section class="tab" id="tab-visualize" role="tabpanel">
+    <div class="content">
+      <div class="notice" id="vizMessage" role="status"></div>
+      <div id="vizBody" hidden class="content">
+        <div class="toolbar">
+          <div class="segmented" id="vizKind" role="group" aria-label="Plot type">
+            <button data-kind="bar" aria-pressed="true">Bar plot</button>
+            <button data-kind="heatmap" aria-pressed="false">Heatmap</button>
+            <button data-kind="sankey" aria-pressed="false">Sankey</button>
+            <button data-kind="network" aria-pressed="false">Network</button>
+            <button data-kind="circos" aria-pressed="false">Circos</button>
+          </div>
+          <label class="field"><span>Metric</span> <select id="vizMetric"></select></label>
+          <label class="field"><span>Hide below</span>
+            <input type="range" id="vizThreshold" min="0" max="1" step="0.01" value="0">
+            <output id="vizThresholdValue" for="vizThreshold">0.00</output>
+          </label>
+          <label class="field" id="netLayoutField" hidden><span>Layout</span>
+            <select id="netLayout">
+              <option value="force">Force-directed</option>
+              <option value="circle">Circle</option>
+              <option value="grid">Grid</option>
+            </select>
+          </label>
+          <span class="spacer"></span>
+          <button class="btn small" id="downloadSvg">Download SVG</button>
+          <button class="btn small" id="downloadPng">Download PNG</button>
+        </div>
+        <div class="card">
+          <header><h3 id="vizTitle"></h3><p id="vizNote"></p></header>
+          <div class="chart" id="vizChart"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ NETWORK QUALITY -->
+  <section class="tab" id="tab-quality" role="tabpanel">
+    <div class="layout">
+      <aside class="panel">
+        <section>
+          <h2>Network file</h2>
+          <label class="dropzone" id="networkDropzone">
+            <input type="file" id="networkInput" accept=".txt,.tsv,.tab,.csv,text/plain">
+            <strong>Choose an edge list or drop it here</strong>
+            <span id="networkName">No network loaded</span>
+          </label>
+          <p class="hint">Two columns (source, target) or three (with a numeric weight), separated by tabs or spaces. The network is treated as undirected.</p>
+          <button class="btn" id="exampleNetwork">Load the example network and its cluster sets</button>
+        </section>
+        <section>
+          <h2>Cluster set</h2>
+          <select id="qualitySet" aria-label="Cluster set to evaluate"></select>
+          <div class="segmented" id="qualityStage" role="group" aria-label="Data stage">
+            <button data-stage="raw" aria-pressed="true">As loaded</button>
+            <button data-stage="filtered" aria-pressed="false">After filters</button>
+          </div>
+        </section>
+      </aside>
+      <div class="content">
+        <div class="notice" id="qualityMessage" role="status"></div>
+        <div id="qualityBody" hidden class="content">
+          <div class="tiles" id="qualityTiles"></div>
+          <div class="grid2">
+            <div class="card">
+              <header><h3>Network coloured by cluster</h3><p>The eight largest clusters are coloured</p></header>
+              <div class="chart" id="chartGraph"></div>
+              <div class="legend" id="graphLegend"></div>
+            </div>
+            <div class="card">
+              <header><h3>Conductance of the clusters</h3><p>Closer to 0 means better separated</p></header>
+              <div class="chart" id="chartConductance"></div>
+            </div>
+          </div>
+          <div class="card">
+            <header>
+              <h3>Quality per cluster</h3>
+              <button class="btn small" id="downloadQualityCsv">Download CSV</button>
+            </header>
+            <div class="table-scroll"><table id="qualityTable"></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ HELP -->
+  <section class="tab" id="tab-help" role="tabpanel">
+    <div class="help">
+      <div>
+        <h2>What VICTOR does</h2>
+        <p>VICTOR compares cluster sets: the results of different clustering algorithms, or of one algorithm with different parameters, on the same objects. It scores how similar every pair of results is and shows the scores as tables and plots. It does not run clustering itself and it does not pick a best result. Everything is calculated in your browser; your files are never sent anywhere.</p>
+      </div>
+      <div>
+        <h2>File formats</h2>
+        <p><b>Cluster set.</b> A text file with one cluster per line and two tab-separated columns: the cluster name, then its members separated by commas. No header.</p>
+<pre>cluster1	F18,F22,F28,F32
+cluster2	F05,F10,F14
+cluster3	F06,F11</pre>
+        <p class="mt10"><b>Network.</b> An edge list with two columns (source, target) or three (plus a numeric weight), separated by tabs or spaces. Duplicate edges are merged with their weights summed and self-loops are dropped.</p>
+<pre>N1	N10	0.8
+N2	N11	0.3</pre>
+      </div>
+      <div>
+        <h2>Preparing sets for comparison</h2>
+        <p>The compared sets must contain identical objects. All metrics except the two for overlapping clusterings also need strict partitions, where each object is in exactly one cluster. When the selected sets differ in their objects, use the filters in the Files tab:</p>
+        <ul>
+          <li><b>Cluster size range</b> drops clusters that are too small or too large, for example singletons.</li>
+          <li><b>Intersection</b> keeps only the objects that every selected set contains.</li>
+          <li><b>Superset</b> keeps all objects and gives each set a singleton cluster for every object it lacks.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Comparison metrics</h2>
+        <p>All 27 metrics are similarities: higher means more alike, and 1 means identical cluster sets. For a pair shown as "A vs B", the asymmetric metrics treat A as the reference. Below, n is the number of objects, m<sub>ij</sub> the number of objects shared by cluster i of A and cluster j of B, H the entropy and I the mutual information.</p>
+        <h3 class="mt12">Counting pairs</h3>
+        <dl>
+          <dt>Adjusted Rand Index</dt><dd>Agreement on object pairs, corrected for chance. Around 0 for unrelated sets; can be negative.</dd>
+          <dt>Rand Index</dt><dd>Fraction of object pairs on which the two sets agree. Drifts towards 1 when there are many clusters, so prefer the adjusted version.</dd>
+          <dt>Fowlkes-Mallows Index</dt><dd>Geometric mean of the two Wallace criteria.</dd>
+          <dt>Jaccard Index</dt><dd>Pairs co-clustered in both sets, divided by pairs co-clustered in at least one.</dd>
+          <dt>Overlap Coefficient</dt><dd>Pairs co-clustered in both sets, divided by the smaller of the two sets' co-clustered pair counts.</dd>
+          <dt>Wallace Criterion 1 and 2</dt><dd>Probability that a pair co-clustered in A is also co-clustered in B (type 1), and the reverse (type 2). Asymmetric.</dd>
+        </dl>
+        <h3 class="mt12">Set overlaps and matching</h3>
+        <dl>
+          <dt>Maximum-Match Measure</dt><dd>Clusters are paired greedily by largest overlap; the matched overlaps are summed and divided by n.</dd>
+          <dt>F-Measure</dt><dd>Each cluster of A takes its best F-score, 2m<sub>ij</sub> / (|A<sub>i</sub>| + |B<sub>j</sub>|), over the clusters of B; the scores are averaged weighted by cluster size. Asymmetric.</dd>
+          <dt>Optimal-Match Accuracy</dt><dd>Like the Maximum-Match Measure, but the one-to-one pairing of clusters is the best possible one (Hungarian algorithm) instead of a greedy one, so it is never lower. It equals 1 minus the classification error distance.</dd>
+          <dt>Purity (Meila-Heckerman)</dt><dd>Each cluster of A takes its largest overlap with a cluster of B; the overlaps are summed and divided by n. Asymmetric.</dd>
+          <dt>Van Dongen Measure</dt><dd>The Van Dongen distance, 2n minus the row maxima and the column maxima of the confusion matrix, divided by 2n and subtracted from 1.</dd>
+          <dt>B-Cubed Precision, Recall, F-Score</dt><dd>Per-object scores averaged over all objects. Precision: the share of an object's B cluster that is also in its A cluster. Recall: the share of its A cluster that is also in its B cluster. The F-Score is their harmonic mean. Precision and recall are asymmetric.</dd>
+          <dt>Element-Centric Similarity</dt><dd>Per-object score averaged over all objects (Gates et al. 2019). For strict partitions it is the number of objects sharing both of the object's clusters, divided by the size of the larger of the two. It is symmetric and never exceeds either B-Cubed precision or recall.</dd>
+        </dl>
+        <h3 class="mt12">Mutual information</h3>
+        <dl>
+          <dt>NMI by Strehl &amp; Ghosh</dt><dd>I divided by the geometric mean of the two entropies.</dd>
+          <dt>NMI by Fred &amp; Jain</dt><dd>I divided by the arithmetic mean of the two entropies. This is also the V-Measure.</dd>
+          <dt>NMI by the larger entropy</dt><dd>I divided by the larger of the two entropies; the strictest normalization.</dd>
+          <dt>Adjusted Mutual Information</dt><dd>I corrected for chance: (I &minus; E[I]) / (mean entropy &minus; E[I]), where E[I] is the value expected for random sets with the same cluster sizes. Prefer it to NMI when the compared sets have very different numbers of clusters.</dd>
+          <dt>Normalized Variation of Information</dt><dd>&frac12;(H(A|B)/H(A) + H(B|A)/H(B)), subtracted from 1.</dd>
+          <dt>Variation of Information</dt><dd>H(A) + H(B) &minus; 2I, divided by its upper bound log n and subtracted from 1.</dd>
+          <dt>Variation of Information by joint entropy</dt><dd>The same distance divided by the joint entropy H(A,B) and subtracted from 1. Unlike the log n version it reaches 0 for independent sets of any size.</dd>
+          <dt>Homogeneity and Completeness</dt><dd>Homogeneity, I / H(A), is 1 when every cluster of B lies inside one cluster of A. Completeness, I / H(B), is 1 when every cluster of A lies inside one cluster of B. Together they show whether one set refines the other. Asymmetric.</dd>
+        </dl>
+        <h3 class="mt12">Overlapping clusterings</h3>
+        <p>These two are the only metrics that accept sets in which an object belongs to several clusters. When a selected set overlaps, only they are calculated. They also work on strict partitions.</p>
+        <dl>
+          <dt>Omega Index</dt><dd>The Adjusted Rand Index generalized to overlaps (Collins &amp; Dent 1988): two sets agree on a pair of objects when the pair shares the same number of clusters in both; the agreement is corrected for chance. On strict partitions it equals the Adjusted Rand Index.</dd>
+          <dt>Overlapping NMI</dt><dd>The measure of Lancichinetti, Fortunato &amp; Kert&eacute;sz (2009). Every cluster is treated as a yes/no property of the objects and is explained by its best-matching cluster in the other set; the remaining uncertainty is averaged over both directions and subtracted from 1. On strict partitions it is not equal to the ordinary NMI.</dd>
+        </dl>
+      </div>
+      <div>
+        <h2>Plots</h2>
+        <ul>
+          <li><b>Bar plot</b>: one bar per pair of cluster sets, sorted by similarity.</li>
+          <li><b>Heatmap</b>: all pairs in a grid, with rows and columns ordered by average-linkage hierarchical clustering so that similar sets sit together. The diagonal is left neutral.</li>
+          <li><b>Sankey</b>: cluster sets as blocks joined by bands. Band thickness is relative to the other pairs shown, not an absolute scale.</li>
+          <li><b>Network</b>: cluster sets as nodes; thicker edges mean more similar sets. Drag nodes to rearrange.</li>
+          <li><b>Circos</b>: cluster sets as arcs; ribbons join the pairs, shaded by similarity.</li>
+        </ul>
+        <p class="mt8">"Hide below" removes the pairs whose similarity is under the chosen value. Every plot can be saved as SVG or PNG.</p>
+      </div>
+      <div>
+        <h2>Network quality</h2>
+        <p>Load a network and choose a cluster set to see how well its clusters are separated on that network.</p>
+        <dl>
+          <dt>Conductance</dt><dd>Weight of the edges leaving the cluster, divided by the smaller of the cluster's volume and the rest of the network's volume (volume is the sum of weighted degrees). Closer to 0 is better.</dd>
+          <dt>Internal density</dt><dd>Edges inside the cluster divided by the number of possible edges inside it.</dd>
+          <dt>Cut ratio</dt><dd>Edges leaving the cluster divided by the number of possible edges between the cluster and the rest.</dd>
+          <dt>Modularity</dt><dd>How much more edge weight falls inside clusters than expected at random, for the whole cluster set. Network nodes outside every cluster count as singletons.</dd>
+          <dt>Coverage</dt><dd>Share of the total edge weight that lies inside clusters.</dd>
+        </dl>
+      </div>
+      <div>
+        <h2>Citation</h2>
+        <p>Karatzas E., Gkonta M., Hotova J., Baltoumas F.A., Kontou P.I., Bobotsis C.J., Bagos P.G., Pavlopoulos G.A. VICTOR: A visual analytics web application for comparing cluster sets. <i>Computers in Biology and Medicine</i> 135 (2021) 104557. <a href="https://doi.org/10.1016/j.compbiomed.2021.104557" target="_blank" rel="noopener noreferrer">doi:10.1016/j.compbiomed.2021.104557</a></p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>VICTOR runs entirely in your browser. Open-source under the AGPL-3.0 licence.</footer>
+
+<script src="lib/d3.v5.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/examples.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
