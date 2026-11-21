@@ -1,69 +1,91 @@
-# VICTOR: A Visual Analytics Web Application for Clustering Comparison
+# VICTOR: a visual analytics web application for comparing cluster sets
 
-**VICTOR** is a web-based tool designed to facilitate the analysis and comparison of multiple clustering results in a user-friendly, interactive environment.
+**VICTOR** compares the results of different clusterings of the same objects: different algorithms, or one algorithm with different parameters. It scores how similar every pair of results is and shows the scores as tables and interactive plots.
 
-## Key Features
+VICTOR does not run clustering itself and does not pick a "best" result. It runs entirely in your browser: there is nothing to install, and the files you load never leave your computer.
 
-* **Handle Multiple Clustering Results**
-  Load and manage several clustering outputs simultaneously for side-by-side analysis.
+## What you can do
 
-* **Threshold Filters**
-  Apply size-based thresholds to focus on clusters of interest.
+* **Load several cluster sets at once**, rename or remove them, and see their number of clusters, number of objects and cluster size distribution.
+* **Prepare sets for comparison**
+  * Drop clusters outside a size range, for example singletons.
+  * **Intersection**: keep only the objects that every selected set contains.
+  * **Superset**: keep all objects and give each set a singleton cluster for every object it lacks.
+  * An **UpSet plot** shows which objects the selected sets share whenever they differ.
+* **Compare with 27 metrics** in four families. All are similarities: higher means more alike, and 1 means identical.
+  * *Counting pairs*: Adjusted Rand Index, Rand Index, Fowlkes–Mallows Index, Jaccard Index, Overlap Coefficient, Wallace Criteria 1 and 2
+  * *Set overlaps / matching*: Maximum-Match, Optimal-Match Accuracy (Hungarian), F-Measure, Purity (Meila–Heckerman), Van Dongen (normalized), B-Cubed Precision, Recall and F-Score, Element-Centric Similarity
+  * *Mutual information*: three Normalized Mutual Information variants, Adjusted Mutual Information, Normalized Variation of Information, Variation of Information (normalized by log n and by joint entropy), Homogeneity, Completeness
+  * *Overlapping clusterings*: Omega Index, Overlapping NMI. These two also accept sets in which an object belongs to several clusters.
+* **Match clusters** between two sets: which cluster of one corresponds best to which cluster of the other, and how many objects they share.
+* **Visualize** any metric as a bar plot, hierarchical heatmap, Sankey plot, network or circos plot, and hide the pairs below a chosen similarity.
+* **Check cluster quality on a network**: conductance, internal density and cut ratio per cluster, plus modularity and coverage for the whole set.
+* **Export** every plot as PNG, SVG, PDF, JPEG or WebP at up to six times the on-screen resolution, and every table as CSV.
 
-* **Comparison Metrics**
-  Compare cluster sets using **27 different metrics** in four families:
+The interface has a light and a dark theme and works on phones.
 
-  * Counting pairs: Adjusted Rand Index, Rand Index, Fowlkes–Mallows Index, Jaccard Index, Overlap Coefficient, Wallace Criteria 1 and 2
-  * Set overlaps / matching: Maximum-Match, Optimal-Match Accuracy (Hungarian), F-Measure, Purity (Meila–Heckerman), Van Dongen (normalized), B-Cubed Precision, Recall and F-Score, Element-Centric Similarity
-  * Mutual information: three Normalized Mutual Information variants, Adjusted Mutual Information, Normalized Variation of Information, Variation of Information (normalized by log n and by joint entropy), Homogeneity, Completeness
-  * Overlapping clusterings: Omega Index, Overlapping NMI
+## File formats
 
-* **Interactive Visualizations**
+**Cluster set.** A text file with one cluster per line and two tab-separated columns: the cluster name, then its members separated by commas. No header.
 
-  * Heatmaps
-  * Bar plots
-  * Network graphs
-  * Sankey diagrams
-  * Circos plots
+```
+cluster1	F18,F22,F28,F32
+cluster2	F05,F10,F14
+cluster3	F06,F11
+```
 
-* **Metric Thresholds**
-  Filter cluster comparisons by setting thresholds on any of the computed metrics.
+**Network.** An edge list with two columns (source, target) or three (plus a numeric weight), separated by tabs or spaces. The network is treated as undirected.
 
-* **Network Representation**
-  Calculate how well clusters are separated on a given network: conductance, internal density and cut ratio per cluster, plus modularity and coverage.
+```
+N1	N10	0.8
+N2	N11	0.3
+```
 
-* **Export Options**
-  Download every plot as SVG or PNG and every table as CSV.
+Example files are in [`docs/examples`](docs/examples) and can also be loaded with one click inside the application.
 
-## Installation & Usage
+## Running it
 
-VICTOR is a static web application. All calculations run in the browser, so there is nothing to install and no data leaves your computer.
+VICTOR is a static web application. Serve the `docs` folder with any web server:
 
 ```bash
-# Clone the repository
 git clone https://github.com/PavlopoulosLab/VICTOR.git
-
-# Serve the docs folder with any static web server, for example
 cd VICTOR/docs
 python3 -m http.server 8000
 ```
 
-Then open http://localhost:8000. The `docs/` folder can also be published as it is with GitHub Pages (Settings → Pages → deploy from the `/docs` folder of the main branch).
+Then open http://localhost:8000.
 
-* `docs/js/core.js`: parsing, filters, the 27 metrics, cluster matching and network quality measures (no dependencies)
-* `docs/js/charts.js`: plots, drawn with the bundled d3 v5
-* `docs/js/app.js`: user interface
-* `docs/test/test.html`: self-checks of the calculations; open it in a browser to run them
+To publish it, enable GitHub Pages for the repository (Settings → Pages → deploy from the `/docs` folder of the `main` branch).
+
+## Size limits
+
+The 20 basic metrics and the Adjusted Mutual Information grow with the number of objects, not the number of clusters: one pair of sets with 500,000 objects takes about a quarter of a second. Three metrics are costlier (Optimal-Match Accuracy, Omega Index, Overlapping NMI); when the loaded sets are too large for one of them, it is left out with a notice and the others are still calculated. Comparisons expected to take more than a few seconds ask for confirmation first. Files above 50 MB are refused.
+
+## Privacy and security
+
+* All calculations happen in the browser. The page makes no network requests after it has loaded, and a content security policy enforces this.
+* No third-party scripts, cookies or analytics. The only stored value is the chosen colour theme.
+* Names read from files are always treated as text, and exported CSV cells that could run as spreadsheet formulas are neutralized.
+
+## Code
+
+* [`docs/js/core.js`](docs/js/core.js): parsing, filters, the 27 metrics, cluster matching and network quality measures. No dependencies.
+* [`docs/js/charts.js`](docs/js/charts.js): the plots, drawn with the bundled d3 v5, and the image export.
+* [`docs/js/app.js`](docs/js/app.js): the user interface.
+* [`docs/test/test.html`](docs/test/test.html): self-checks of the calculations. Open it in a browser to run them.
 
 ### Previous R/Shiny version
 
-The original R/Shiny application described in the publication is still in the repository root (`ui.R`, `server.R`, `global.R`, `metrics.R`, `www/`). It needs R with the packages shiny, shinyjs, shinythemes, shinyWidgets, mclustcomp, igraph, d3heatmap, RColorBrewer, stringr, DT and visNetwork, and is started with `shiny::runApp()`.
+The original R/Shiny application described in the publication is still in the repository root (`ui.R`, `server.R`, `global.R`, `metrics.R`, `www/`). It needs R with the packages shiny, shinyjs, shinythemes, shinyWidgets, mclustcomp, igraph, d3heatmap, RColorBrewer, stringr, DT and visNetwork, and is started with `shiny::runApp()`. The additions in `metrics.R` have not been tested. New development happens in the browser version.
 
 ## Publication
 
-**Karatzas E., Gkonta M., Hotova J., Baltoumas FA., Kontou PI., Bobotsis CJ., Bagos PG., Pavlopoulos GA.**
+Karatzas E., Gkonta M., Hotova J., Baltoumas F.A., Kontou P.I., Bobotsis C.J., Bagos P.G., Pavlopoulos G.A.
+*VICTOR: A visual analytics web application for comparing cluster sets.* **Computers in Biology and Medicine** 135 (2021) 104557.
+DOI: [10.1016/j.compbiomed.2021.104557](https://doi.org/10.1016/j.compbiomed.2021.104557) · PMID: [34139436](https://pubmed.ncbi.nlm.nih.gov/34139436/)
 
-*“VICTOR: A visual analytics web application for comparing cluster sets.”* **Computers in Biology and Medicine**, 8 June 2021, Article 104557.
-DOI: [10.1016/j.compbiomed.2021.104557](https://doi.org/10.1016/j.compbiomed.2021.104557)
-PMID: [34139436](https://pubmed.ncbi.nlm.nih.gov/34139436/)
+The published article describes the original application with ten metrics. The browser version adds the other metrics, the network quality measures beyond conductance, the UpSet plot and the export options.
 
+## Licence
+
+GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
