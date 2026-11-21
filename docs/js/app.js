@@ -93,6 +93,14 @@
     viz: { kind: "bar", metric: null, threshold: null, layout: "force" },
     network: null,       // parsed edge list
     networkName: "",
+    networks: [],        // every loaded network: { id, name, net }; state.network / networkName mirror the active one
+    networkId: null,
+    gridMeasure: "modularity",
+    gridOffSets: {},     // cluster set ids left out of the sets x networks grid
+    gridOffNets: {},     // network ids left out of it
+    qualityGrid: {},     // "networkId|setId" -> summary of that cluster set on that network
+    compareMode: "all",  // "all" pairs, or every set against one "reference"
+    referenceId: null,
     qualityId: null,
     qualityStage: "raw",
     quality: null,
@@ -202,23 +210,48 @@
     }
   }
 
+  function addNetwork(name, text) {
+    var net = C.parseEdgeList(text), base = name.replace(/\.(txt|tsv|tab|csv)$/i, ""), unique = base, k = 2;
+    while (state.networks.some(function (n) { return n.name === unique; })) unique = base + " (" + (k++) + ")";
+    var entry = { id: state.nextId++, name: unique, net: net };
+    state.networks.push(entry);
+    setActiveNetwork(entry.id);
+    return entry;
+  }
+
+  function setActiveNetwork(id) {
+    var entry = state.networks.filter(function (n) { return n.id === id; })[0] || state.networks[0] || null;
+    state.networkId = entry ? entry.id : null;
+    state.network = entry ? entry.net : null;
+    state.networkName = entry ? entry.name : "";
+  }
+
+  // One line of numbers for a cluster set on a network
+  function summarizeQuality(q, set) {
+    var cond = q.rows.map(function (r) { return r.conductance; }).filter(function (v) { return v !== null; }).sort(function (a, b) { return a - b; });
+    var inNetwork = 0, objects = 0;
+    q.rows.forEach(function (r) { inNetwork += r.inNetwork; objects += r.objects; });
+    return { id: set.id, name: set.name, clusters: q.rows.length, inNetwork: inNetwork, objects: objects,
+      found: objects > 0 ? inNetwork / objects : null,
+      modularity: q.modularity, coverage: q.coverage, medianConductance: cond.length ? cond[Math.floor((cond.length - 1) / 2)] : null };
+  }
+
   function computeQuality() {
     state.quality = null;
     state.qualityAll = [];
+    state.qualityGrid = {};
+    setActiveNetwork(state.networkId);
     var set = setById(state.qualityId);
     if (!state.network || !set) return;
-    var clusters = state.qualityStage === "raw" ? set.raw : set.filtered;
-    state.quality = C.clusterQuality(state.network, clusters);
-    state.quality.clusters = clusters;
-    // the same measures, summarized for every loaded set, so the sets can be told apart on the network
-    state.qualityAll = state.sets.map(function (other) {
-      var q = other === set ? state.quality : C.clusterQuality(state.network, state.qualityStage === "raw" ? other.raw : other.filtered);
-      var cond = q.rows.map(function (r) { return r.conductance; }).filter(function (v) { return v !== null; }).sort(function (a, b) { return a - b; });
-      var inNetwork = 0, objects = 0;
-      q.rows.forEach(function (r) { inNetwork += r.inNetwork; objects += r.objects; });
-      return { id: other.id, name: other.name, clusters: q.rows.length, inNetwork: inNetwork, objects: objects,
-        modularity: q.modularity, coverage: q.coverage, medianConductance: cond.length ? cond[Math.floor((cond.length - 1) / 2)] : null };
+    // every loaded cluster set on every loaded network
+    state.networks.forEach(function (n) {
+      state.sets.forEach(function (other) {
+        var clusters = state.qualityStage === "raw" ? other.raw : other.filtered, q = C.clusterQuality(n.net, clusters);
+        state.qualityGrid[n.id + "|" + other.id] = summarizeQuality(q, other);
+        if (n.id === state.networkId && other === set) { state.quality = q; state.quality.clusters = clusters; }
+      });
     });
+    state.qualityAll = state.sets.map(function (other) { return state.qualityGrid[state.networkId + "|" + other.id]; });
   }
 
   // Table with one row per cluster set: how it scores on the loaded network. onPick(id) makes rows clickable.
@@ -295,10 +328,22 @@
   }
 
   // ---------------------------------------------------------------- pair list for the plots
+  // The pairs the user asked for, as [first, second] indexes into the result: every pair, or the reference set
+  // against each of the others (the reference comes first, which is what the asymmetric metrics expect).
+  function activePairs(r) {
+    var pairs = [], i, j;
+    if (state.compareMode === "reference" && r.names.length > 2) {
+      var ref = Math.max(0, r.ids.indexOf(state.referenceId));
+      for (j = 0; j < r.names.length; j++) if (j !== ref) pairs.push([ref, j]);
+    } else {
+      for (i = 0; i < r.names.length; i++) for (j = i + 1; j < r.names.length; j++) pairs.push([i, j]);
+    }
+    return pairs;
+  }
+
   function pairList() {
-    var r = state.result, m = r.matrix[state.viz.metric], out = [];
-    for (var i = 0; i < r.names.length; i++) for (var j = i + 1; j < r.names.length; j++) out.push({ i: i, j: j, value: m[i][j] });
-    return out;
+    var r = state.result, m = r.matrix[state.viz.metric];
+    return activePairs(r).map(function (p) { return { i: p[0], j: p[1], value: m[p[0]][p[1]] }; });
   }
 
   // ---------------------------------------------------------------- rendering: files
@@ -545,13 +590,15 @@
       setNotice(msg, state.sets.length ? "warn" : "", (state.sets.length ? notRunParts() : ["Load cluster set files first. "]).concat([linkTo("files", "Go to step 1")]));
       return;
     }
-    var nPairs = r.names.length * (r.names.length - 1) / 2;
+    if (r.ids.indexOf(state.referenceId) < 0) state.referenceId = r.ids[0];
+    fillSelect($("referenceSet"), r.ids.map(function (id, k) { return [id, "Reference: " + r.names[k]]; }), state.referenceId);
+    $("referenceSet").hidden = state.compareMode !== "reference";
+    var nPairs = activePairs(r).length;
     var caveats = (r.note ? r.note + " " : "") + skippedText(r);
     setNotice(msg, caveats ? "warn" : "good", [bold(r.names.length + " cluster sets, " + nPairs + " pair" + (nPairs > 1 ? "s" : "") + ", " + r.codes.length + " metric" + (r.codes.length > 1 ? "s" : "") + ". "),
       caveats, linkTo("visualize", "Plot these results \u2192", "btn small primary")]);
 
-    var table = $("resultsTable"), pairs = [], i, j;
-    for (i = 0; i < r.names.length; i++) for (j = i + 1; j < r.names.length; j++) pairs.push([i, j]);
+    var table = $("resultsTable"), pairs = activePairs(r), i, j;
     var pairName = function (p) { return r.names[p[0]] + " vs " + r.names[p[1]]; };
 
     // headline: most and least similar pair by the metric shown in the plots
@@ -702,6 +749,7 @@
     var def = C.metricByCode(v.metric), shown = pairs.filter(function (p) { return p.value >= v.threshold - 1e-9; });
     $("vizTitle").textContent = VIZ_TITLES[v.kind] + ": " + def.label;
     $("vizNote").textContent = VIZ_NOTES[v.kind] + " Showing " + shown.length + " of " + pairs.length + " pairs." +
+      (state.compareMode === "reference" && r.names.length > 2 ? " Pairs: each set against the reference" + (v.kind === "heatmap" ? " (the heatmap always shows every pair)." : ".") : "") +
       (def.symmetric ? "" : " Asymmetric metric: the first set of each pair is the reference.") +
       (r.names.length > CROWDED_ABOVE_SETS && (v.kind === "sankey" || v.kind === "network" || v.kind === "circos")
         ? " With " + r.names.length + " sets this plot is crowded: raise \"Hide below\" or use the heatmap." : "");
@@ -748,9 +796,7 @@
 
   function renderQuality() {
     var msg = $("qualityMessage"), q = state.quality;
-    $("networkName").textContent = state.network
-      ? state.networkName + ": " + state.network.nodes.length + " nodes, " + state.network.edges.length + " edges"
-      : "No network loaded";
+    renderNetworkList();
     fillSelect($("qualitySet"), state.sets.map(function (s) { return [s.id, s.name]; }), state.qualityId);
     $("normaOpen").disabled = $("normaDownload").disabled = !(state.network && state.sets.length > 0);
     setPressed($("qualityStage"), "stage", state.qualityStage);
@@ -787,6 +833,7 @@
       tile.appendChild(el("div", { class: "v" }, t[1]));
       box.appendChild(tile);
     });
+    renderQualityGrid();
     $("qualityAllCard").hidden = state.qualityAll.length < 2;
     renderSetQualityTable($("qualityAllTable"), state.qualityAll, state.qualityId, function (id) {
       state.qualityId = id;
@@ -808,6 +855,101 @@
       empty: "No cluster has a defined conductance."
     });
     renderQualityTable();
+  }
+
+  // Loaded networks: choose the one shown in detail, or remove one
+  function renderNetworkList() {
+    var box = $("networkList");
+    empty(box);
+    state.networks.forEach(function (n) {
+      var row = el("div", { class: "pick-row" + (n.id === state.networkId ? " active" : "") });
+      var radio = el("input", { type: "radio", name: "activeNetwork", "aria-label": "Show " + n.name + " in detail" });
+      radio.checked = n.id === state.networkId;
+      radio.addEventListener("change", function () { state.networkId = n.id; computeQuality(); render(); });
+      var remove = el("button", { class: "btn small", type: "button", "aria-label": "Remove network " + n.name }, "Remove");
+      remove.addEventListener("click", function () {
+        state.networks = state.networks.filter(function (x) { return x !== n; });
+        computeQuality();
+        render();
+      });
+      row.appendChild(radio);
+      row.appendChild(el("span", { class: "name", title: n.name }, n.name));
+      row.appendChild(el("span", { class: "meta" }, n.net.nodes.length.toLocaleString() + " nodes, " + n.net.edges.length.toLocaleString() + " edges"));
+      row.appendChild(remove);
+      box.appendChild(row);
+    });
+  }
+
+  var GRID_MEASURES = {
+    modularity: { label: "Modularity", best: "max", hint: "Higher is better: more edge weight inside clusters than expected at random." },
+    coverage: { label: "Coverage", best: "max", hint: "Higher is better: the share of edge weight that lies inside clusters." },
+    medianConductance: { label: "Median conductance", best: "min", hint: "Lower is better: the typical cluster has few edges leaving it." },
+    found: { label: "Objects found", best: "max", hint: "Share of the set's objects that are nodes of the network. Low values mean the set and the network do not belong together." }
+  };
+
+  // Every ticked cluster set on every ticked network, for one measure. Click a cell to see that combination in detail.
+  function renderQualityGrid() {
+    var card = $("qualityGridCard"), table = $("qualityGridTable"), measure = GRID_MEASURES[state.gridMeasure];
+    card.hidden = state.networks.length < 2;
+    if (card.hidden) return;
+    setPressed($("gridMeasure"), "measure", state.gridMeasure);
+    $("gridHint").textContent = measure.hint + " Untick a cluster set or a network to leave it out; click a value to see that combination in detail below. The best value in each column is in bold.";
+    empty(table);
+    function toggle(store, id, label) {
+      var wrap = el("label"), cb = el("input", { type: "checkbox", "aria-label": "Include " + label });
+      cb.checked = !store[id];
+      cb.addEventListener("change", function () { if (cb.checked) delete store[id]; else store[id] = true; renderQualityGrid(); });
+      wrap.appendChild(cb);
+      wrap.appendChild(document.createTextNode(label));
+      return wrap;
+    }
+    var thead = el("thead"), hr = el("tr"), tbody = el("tbody");
+    hr.appendChild(el("th", null, "Cluster set / Network"));
+    state.networks.forEach(function (n) {
+      var th = el("th", { class: state.gridOffNets[n.id] ? "off" : "" });
+      th.appendChild(toggle(state.gridOffNets, n.id, n.name));
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    var value = function (n, set) { var g = state.qualityGrid[n.id + "|" + set.id]; return g ? g[state.gridMeasure] : null; };
+    var best = {};
+    state.networks.forEach(function (n) {
+      var values = state.sets.filter(function (set) { return !state.gridOffSets[set.id]; }).map(function (set) { return value(n, set); })
+        .filter(function (v) { return v !== null && v !== undefined; });
+      if (values.length > 1) best[n.id] = measure.best === "max" ? Math.max.apply(null, values) : Math.min.apply(null, values);
+    });
+    state.sets.forEach(function (set) {
+      var tr = el("tr"), head = el("td", { class: state.gridOffSets[set.id] ? "off" : "" });
+      head.appendChild(toggle(state.gridOffSets, set.id, set.name));
+      tr.appendChild(head);
+      state.networks.forEach(function (n) {
+        var off = state.gridOffSets[set.id] || state.gridOffNets[n.id], v = value(n, set);
+        var td = el("td", { class: "cell" + (off ? " off" : "") + (!off && v !== null && v === best[n.id] ? " best" : "") +
+          (n.id === state.networkId && set.id === state.qualityId ? " current" : ""), tabindex: "0", role: "button",
+          "aria-label": set.name + " on " + n.name + ": " + G.fmt(v) }, off ? "\u2013" : G.fmt(v));
+        var pick = function () { state.networkId = n.id; state.qualityId = set.id; computeQuality(); render(); };
+        td.addEventListener("click", pick);
+        td.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(thead);
+    table.appendChild(tbody);
+  }
+
+  function gridCsvRows() {
+    var rows = [["cluster_set", "network", "clusters", "objects", "objects_in_network", "modularity", "coverage", "median_conductance"]];
+    state.sets.forEach(function (set) {
+      if (state.gridOffSets[set.id]) return;
+      state.networks.forEach(function (n) {
+        var g = state.qualityGrid[n.id + "|" + set.id];
+        if (state.gridOffNets[n.id] || !g) return;
+        rows.push([set.name, n.name, g.clusters, g.objects, g.inNetwork, g.modularity === null ? "" : g.modularity,
+          g.coverage === null ? "" : g.coverage, g.medianConductance === null ? "" : g.medianConductance]);
+      });
+    });
+    return rows;
   }
 
   function renderQualityTable() {
@@ -891,12 +1033,9 @@
   }
 
   function loadNetworkFile(fileList) {
-    readFiles([fileList[0]], function (name, text) {
-      state.network = C.parseEdgeList(text);
-      state.networkName = name;
-    }, function (errors) {
+    readFiles(fileList, addNetwork, function (errors) {
       refresh();
-      if (errors.length) global.alert("The network could not be loaded:\n\n" + errors.join("\n"));
+      if (errors.length) global.alert("Some networks could not be loaded:\n\n" + errors.join("\n"));
     });
   }
 
@@ -913,9 +1052,10 @@
       opts.metrics.forEach(function (code) { if (state.metrics.indexOf(code) < 0) state.metrics.push(code); });
       renderMetricList();
     }
-    if (opts.network) {
-      state.network = C.parseEdgeList(VICTOR.examples[opts.network]);
-      state.networkName = opts.network;
+    if (opts.networks) {
+      state.networks = [];
+      opts.networks.forEach(function (f) { addNetwork(f, VICTOR.examples[f]); });
+      setActiveNetwork(state.networks[0].id);
     }
     refresh();
   }
@@ -961,7 +1101,7 @@
 
   function normaPayload(data) {
     var payload = {
-      name: "VICTOR " + state.networkName.replace(/\.(txt|tsv|tab|csv)$/i, ""),
+      name: "VICTOR " + state.networkName,
       edges: state.network.edges.map(function (e) {
         var edge = { source: state.network.nodes[e.s], target: state.network.nodes[e.t] };
         if (state.network.weighted) edge.weight = e.w;
@@ -1014,7 +1154,7 @@
   function downloadNormaFiles() {
     var data = normaData();
     if (!data) { setNormaStatus("Load a network and a cluster set whose objects are nodes of it first.", true); return; }
-    var base = "victor_" + state.networkName.replace(/\.(txt|tsv|tab|csv)$/i, "").replace(/[^A-Za-z0-9._-]+/g, "_");
+    var base = "victor_" + state.networkName.replace(/[^A-Za-z0-9._-]+/g, "_");
     var network = state.network.edges.map(function (e) {
       return state.network.nodes[e.s] + "\t" + state.network.nodes[e.t] + (state.network.weighted ? "\t" + e.w : "");
     }).join("\n") + "\n";
@@ -1126,7 +1266,7 @@
     $("exampleLoad").addEventListener("click", function () { var e = EXAMPLES[+$("exampleSelect").value]; loadExample(e.files, e); });
     $("emptyExample").addEventListener("click", function () { loadExample(EXAMPLES[0].files, EXAMPLES[0]); });
     $("exampleNetwork").addEventListener("click", function () {
-      loadExample(["Clustering_data1.txt", "Clustering_data2.txt", "Clustering_data3.txt"], { network: "Network_file.txt" });
+      loadExample(["Clustering_data1.txt", "Clustering_data2.txt", "Clustering_data3.txt"], { networks: ["Network_file.txt", "Network_file_rewired.txt"] });
     });
 
     $("sizeMin").addEventListener("change", function () { state.sizeMin = Math.max(1, Math.floor(+this.value || 1)); refresh(); });
@@ -1168,10 +1308,10 @@
       var r = state.result, rows = [["metric", "first_set", "second_set", "value"]];
       r.codes.forEach(function (code) {
         var sym = C.metricByCode(code).symmetric;
-        for (var i = 0; i < r.names.length; i++) for (var j = 0; j < r.names.length; j++) {
-          if (i === j || (sym && j < i)) continue;
-          rows.push([code, r.names[i], r.names[j], r.matrix[code][i][j]]);
-        }
+        activePairs(r).forEach(function (p) {
+          rows.push([code, r.names[p[0]], r.names[p[1]], r.matrix[code][p[0]][p[1]]]);
+          if (!sym) rows.push([code, r.names[p[1]], r.names[p[0]], r.matrix[code][p[1]][p[0]]]);
+        });
       });
       downloadCsv(rows, "victor_comparison.csv");
     });
@@ -1208,6 +1348,15 @@
     $("homeNetworkExample").addEventListener("click", function () { $("exampleNetwork").click(); showTab("quality"); });
     $("compareNetworkGo").addEventListener("click", function () { showTab("quality"); });
     $("normaOpen").addEventListener("click", openInNorma);
+    $("gridMeasure").addEventListener("click", function (e) {
+      var measure = e.target.getAttribute("data-measure");
+      if (measure) { state.gridMeasure = measure; renderQualityGrid(); }
+    });
+    $("downloadGridCsv").addEventListener("click", function () { downloadCsv(gridCsvRows(), "victor_sets_on_networks.csv"); });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="compareMode"]'), function (radio) {
+      radio.addEventListener("change", function () { if (radio.checked) { state.compareMode = radio.value; state.viz.threshold = null; render(); } });
+    });
+    $("referenceSet").addEventListener("change", function () { state.referenceId = +this.value; state.viz.threshold = null; render(); });
     $("normaOpenInline").addEventListener("click", openInNorma);
     $("normaDownload").addEventListener("click", downloadNormaFiles);
     $("homeHelp").addEventListener("click", function () { showTab("help"); });

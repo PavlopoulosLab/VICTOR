@@ -9,8 +9,8 @@
 <title>VICTOR: comparing cluster sets</title>
 <meta name="description" content="VICTOR is a visual analytics web application for comparing cluster sets. It runs entirely in your browser.">
 <link rel="icon" href="favicon.ico">
-<link rel="stylesheet" href="css/victor.css?v=14">
-<script src="js/theme.js?v=14"></script>
+<link rel="stylesheet" href="css/victor.css?v=15">
+<script src="js/theme.js?v=15"></script>
 </head>
 <body>
 
@@ -261,6 +261,13 @@ cluster3	F06,F11</pre></div>
   <section class="tab" id="tab-compare" role="tabpanel">
     <div class="layout">
       <aside class="panel">
+        <section>
+          <h2>Which pairs to compare</h2>
+          <label class="check"><input type="radio" name="compareMode" value="all" checked> <span><b>Every pair</b> of the selected sets</span></label>
+          <label class="check"><input type="radio" name="compareMode" value="reference"> <span><b>Each set against one reference</b>, for example a gold standard</span></label>
+          <select id="referenceSet" aria-label="Reference cluster set" hidden></select>
+          <p class="hint">Which sets take part is chosen with the tick boxes in step 1.</p>
+        </section>
         <details id="metricDetails" open>
           <summary><h2>Metrics</h2> <span class="count" id="metricCount">0</span></summary>
           <div class="details-body">
@@ -366,14 +373,15 @@ cluster3	F06,F11</pre></div>
     <div class="layout">
       <aside class="panel">
         <section>
-          <h2>Network file</h2>
+          <h2>Network files</h2>
           <label class="dropzone" id="networkDropzone">
-            <input type="file" id="networkInput" accept=".txt,.tsv,.tab,.csv,text/plain">
-            <strong>Choose an edge list or drop it here</strong>
-            <span id="networkName">No network loaded</span>
+            <input type="file" id="networkInput" multiple accept=".txt,.tsv,.tab,.csv,text/plain">
+            <strong>Choose edge lists or drop them here</strong>
+            <span>One file per network; you can load several</span>
           </label>
+          <div id="networkList" class="pick-list"></div>
           <p class="hint">Two columns (source, target) or three (with a numeric weight), separated by tabs or spaces. The network is treated as undirected.</p>
-          <button class="btn" id="exampleNetwork">Load the example network and its cluster sets</button>
+          <button class="btn" id="exampleNetwork">Load two example networks and their cluster sets</button>
         </section>
         <section>
           <h2>Cluster set</h2>
@@ -394,6 +402,22 @@ cluster3	F06,F11</pre></div>
       <div class="content">
         <div class="notice" id="qualityMessage" role="status"></div>
         <div id="qualityBody" hidden class="content">
+          <div class="card" id="qualityGridCard">
+            <header>
+              <h3>Cluster sets on networks</h3>
+              <div class="toolbar">
+                <div class="segmented" id="gridMeasure" role="group" aria-label="Measure shown">
+                  <button data-measure="modularity" aria-pressed="true" type="button">Modularity</button>
+                  <button data-measure="coverage" aria-pressed="false" type="button">Coverage</button>
+                  <button data-measure="medianConductance" aria-pressed="false" type="button">Median conductance</button>
+                  <button data-measure="found" aria-pressed="false" type="button">Objects found</button>
+                </div>
+                <button class="btn small" id="downloadGridCsv" type="button">Download CSV</button>
+              </div>
+            </header>
+            <p class="hint mb8" id="gridHint"></p>
+            <div class="table-scroll"><table id="qualityGridTable"></table></div>
+          </div>
           <div class="card" id="qualityAllCard">
             <header>
               <h3>All loaded cluster sets on this network</h3>
@@ -574,10 +598,10 @@ N2	N11	0.3</pre>
 
 <footer>VICTOR runs entirely in your browser. Open-source under the AGPL-3.0 licence.</footer>
 
-<script src="lib/d3.v5.min.js?v=14"></script>
-<script src="js/core.js?v=14"></script>
-<script src="js/charts.js?v=14"></script>
-<script src="js/examples.js?v=14"></script>
-<script src="js/app.js?v=14"></script>
+<script src="lib/d3.v5.min.js?v=15"></script>
+<script src="js/core.js?v=15"></script>
+<script src="js/charts.js?v=15"></script>
+<script src="js/examples.js?v=15"></script>
+<script src="js/app.js?v=15"></script>
 </body>
 </html>
