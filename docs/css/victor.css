@@ -419,3 +419,6 @@ td.best { font-weight: 700; }
   background: var(--surface-2); color: var(--text); font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 #apiOutput { max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+
+/* Cytoscape drawings: the library positions its canvases inside this box */
+.cy-box { position: relative; width: 100%; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; touch-action: none; }

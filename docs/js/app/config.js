@@ -87,7 +87,7 @@ export var VIZ_NOTES = {
   map: "Every cluster set is a point; the closer two points, the more similar the sets.",
   heatmap: "Rows and columns are ordered by hierarchical clustering, so similar sets sit together.",
   sankey: "Band thickness is relative to the other pairs shown.",
-  network: "Thicker edges join more similar sets. Drag a node to move it.",
+  network: "Thicker edges join more similar sets. Scroll or pinch to zoom, drag to pan or to move a node.",
   circos: "Ribbons join pairs of sets and are shaded by similarity."
 };
 

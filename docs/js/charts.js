@@ -8,7 +8,6 @@
   var VICTOR = global.VICTOR = global.VICTOR || {};
   var d3 = global.d35; // d3 v5 bundle, exported under the name d35
   var FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-  var activeSimulations = {};
 
   // ---------------------------------------------------------------- theme
   function isDark() {
@@ -54,7 +53,7 @@
   function narrow(W) { return W < 480; }
 
   function clear(el, key) {
-    if (key && activeSimulations[key]) { activeSimulations[key].stop(); delete activeSimulations[key]; }
+    if (el.__cy) { el.__cy.destroy(); el.__cy = null; }
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
@@ -600,62 +599,89 @@
       .text(function (d) { return clip(d.name, narrow(W) ? 11 : 20); }).append("title").text(function (d) { return d.name; });
   }
 
-  // ---------------------------------------------------------------- network of cluster sets
-  // pairs: [{ i, j, value }], opts: { layout: "force" | "circle" | "grid", metric }
+  // ---------------------------------------------------------------- networks (Cytoscape.js)
+  // Both network views are drawn with Cytoscape.js: zoom with the wheel or a pinch, drag the background to pan,
+  // drag nodes to move them, and switch between layouts.
+  var NETWORK_LAYOUTS = {
+    force: "Force-directed", concentric: "Concentric", circle: "Circle", grid: "Grid", breadthfirst: "Tree (breadth-first)", random: "Random"
+  };
+
+  function cyLayout(name, extra) {
+    var common = { animate: false, fit: true, padding: 36 };
+    var byName = {
+      force: { name: "cose", nodeRepulsion: function () { return 400000; }, idealEdgeLength: function () { return 70; }, nodeOverlap: 24,
+        gravity: 0.6, numIter: 1500, randomize: true },
+      concentric: { name: "concentric", minNodeSpacing: 26, concentric: function (node) { return node.data("weight") || node.degree(); },
+        levelWidth: function (nodes) { return Math.max(1, nodes.maxDegree() / 4); } },
+      circle: { name: "circle" }, grid: { name: "grid" }, breadthfirst: { name: "breadthfirst", spacingFactor: 1.1 }, random: { name: "random" }
+    };
+    return Object.assign({}, common, byName[name] || byName.force, extra || {});
+  }
+
+  // A sized box for a Cytoscape drawing inside a chart container
+  function cyBox(el, height) {
+    var box = document.createElement("div");
+    box.className = "cy-box";
+    box.style.height = height + "px";
+    el.appendChild(box);
+    return box;
+  }
+
+  // Tooltips on hover and tap; content(element) returns [title, rows] or null
+  function cyTooltips(cy, content) {
+    cy.on("mouseover tap", "node, edge", function (evt) {
+      var c = content(evt.target);
+      if (!c) return;
+      var rect = cy.container().getBoundingClientRect(), at = evt.renderedPosition || evt.target.renderedMidpoint && evt.target.renderedMidpoint() || { x: 0, y: 0 };
+      showTip({ clientX: rect.left + at.x, clientY: rect.top + at.y }, c[0], c[1]);
+    });
+    cy.on("mouseout", "node, edge", hideTip);
+    cy.on("pan zoom drag", hideTip);
+    cy.on("tap", function (evt) { if (evt.target === cy) hideTip(); });
+  }
+
+  function startCy(el, box, elements, style, layout) {
+    var cy = global.cytoscape({ container: box, elements: elements, style: style, layout: layout, minZoom: 0.1, maxZoom: 6, wheelSensitivity: 0.25 });
+    el.__cy = cy;
+    settleZoom(cy);
+    return cy;
+  }
+
+  // A small network would otherwise be blown up to fill the box; nodes are never shown larger than drawn
+  function settleZoom(cy) {
+    cy.fit(undefined, 36);
+    if (cy.zoom() > 1.6) { cy.zoom(1.6); cy.center(); }
+  }
+
+  // Fits the drawing of a chart container back into view
+  function fitNetwork(el) { if (el.__cy) settleZoom(el.__cy); }
+
+  // Network of cluster sets. pairs: [{ i, j, value }], opts: { layout, metric }
   function network(el, names, pairs, opts) {
-    clear(el, "sets");
+    clear(el);
     opts = opts || {};
     var t = theme();
     if (names.length === 0) return emptyState(el, "Select at least two cluster sets.");
-    var W = chartWidth(el), H = narrow(W) ? Math.round(W * 1.15) : Math.max(420, Math.min(640, W * 0.62));
-    var svg = svgRoot(el, W, H, opts.label);
-    var weights = pairs.length ? relativeWeights(pairs) : [];
-    var nodes = names.map(function (name, i) { return { id: i, name: name }; });
-    var links = pairs.map(function (p, k) { return { source: nodes[p.i], target: nodes[p.j], value: p.value, rel: weights[k] }; });
-    var lg = svg.append("g"), ng = svg.append("g");
-    var line = lg.selectAll("line").data(links).enter().append("line")
-      .attr("stroke", t.series[0]).attr("stroke-opacity", 0.55).attr("stroke-linecap", "round")
-      .attr("stroke-width", function (d) { return 1.5 + d.rel * 9; });
-    hover(line, function (d) { return [d.source.name + " vs " + d.target.name, [[opts.metric || "Similarity", fmt(d.value)]]]; },
-      function () { this.setAttribute("stroke-opacity", 0.95); }, function () { this.setAttribute("stroke-opacity", 0.55); });
-    var node = ng.selectAll("g").data(nodes).enter().append("g").attr("cursor", "grab");
-    node.append("circle").attr("r", 11).attr("fill", t.surface).attr("stroke", t.text).attr("stroke-width", 2);
-    node.append("text").attr("x", narrow(W) ? 0 : 16).attr("y", narrow(W) ? 27 : 4).attr("text-anchor", narrow(W) ? "middle" : "start")
-      .attr("fill", t.text).attr("font-size", 13)
-      .attr("paint-order", "stroke").attr("stroke", t.surface).attr("stroke-width", 3)
-      .text(function (d) { return clip(d.name, narrow(W) ? 12 : 24); });
-    function draw() {
-      var padX = narrow(W) ? 44 : 16, padBottom = narrow(W) ? 36 : 16;
-      nodes.forEach(function (d) { d.x = Math.max(padX, Math.min(W - padX, d.x)); d.y = Math.max(16, Math.min(H - padBottom, d.y)); });
-      line.attr("x1", function (d) { return d.source.x; }).attr("y1", function (d) { return d.source.y; })
-        .attr("x2", function (d) { return d.target.x; }).attr("y2", function (d) { return d.target.y; });
-      node.attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
-    }
-    var layout = opts.layout || "force", sim = null;
-    if (layout === "circle") {
-      var r = Math.min(W, H) / 2 - (narrow(W) ? 50 : 70);
-      nodes.forEach(function (d, i) { var a = 2 * Math.PI * i / nodes.length - Math.PI / 2; d.x = W / 2 + r * Math.cos(a); d.y = H / 2 + r * Math.sin(a); });
-      draw();
-    } else if (layout === "grid") {
-      var cols = Math.ceil(Math.sqrt(nodes.length)), rowsN = Math.ceil(nodes.length / cols);
-      nodes.forEach(function (d, i) { d.x = W * ((i % cols) + 0.5) / cols; d.y = H * (Math.floor(i / cols) + 0.5) / rowsN; });
-      draw();
-    } else {
-      nodes.forEach(function (d, i) { var a = 2 * Math.PI * i / nodes.length; d.x = W / 2 + 120 * Math.cos(a); d.y = H / 2 + 120 * Math.sin(a); });
-      sim = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).distance(function (d) { return (narrow(W) ? 0.5 : 1) * (300 - 190 * d.rel); }).strength(function (d) { return 0.15 + 0.6 * d.rel; }))
-        .force("charge", d3.forceManyBody().strength(narrow(W) ? -260 : -650))
-        .force("center", d3.forceCenter(W / 2, H / 2))
-        .force("collide", d3.forceCollide(28))
-        .on("tick", draw);
-      activeSimulations.sets = sim;
-    }
-    node.call(d3.drag()
-      .on("start", function (d) { if (sim) { if (!d3.event.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; } })
-      .on("drag", function (d) {
-        if (sim) { d.fx = d3.event.x; d.fy = d3.event.y; } else { d.x = d3.event.x; d.y = d3.event.y; draw(); }
-      })
-      .on("end", function (d) { if (sim) { if (!d3.event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; } }));
+    var W = chartWidth(el), H = narrow(W) ? Math.round(W * 1.1) : Math.max(440, Math.min(640, W * 0.6));
+    var weights = pairs.length ? relativeWeights(pairs) : [], strength = names.map(function () { return 0; });
+    pairs.forEach(function (p) { strength[p.i] += p.value; strength[p.j] += p.value; });
+    var elements = names.map(function (name, i) { return { data: { id: "s" + i, label: clip(name, narrow(W) ? 14 : 28), full: name, weight: strength[i] } }; });
+    pairs.forEach(function (p, k) {
+      elements.push({ data: { id: "e" + k, source: "s" + p.i, target: "s" + p.j, value: p.value, rel: weights[k], first: names[p.i], second: names[p.j] } });
+    });
+    var style = [
+      { selector: "node", style: { "background-color": t.surface, "border-color": t.text, "border-width": 2, width: 24, height: 24,
+        label: "data(label)", color: t.text, "font-size": 12, "text-margin-y": -6, "text-outline-color": t.surface, "text-outline-width": 2 } },
+      { selector: "edge", style: { width: "mapData(rel, 0, 1, 1.5, 11)", "line-color": t.series[0], opacity: 0.55, "curve-style": "straight" } },
+      { selector: "node:selected", style: { "border-color": t.series[0], "border-width": 4 } },
+      { selector: "edge:selected", style: { opacity: 1 } }
+    ];
+    var layout = cyLayout(opts.layout, { idealEdgeLength: function (edge) { return 170 - 110 * edge.data("rel"); } });
+    var cy = startCy(el, cyBox(el, H), elements, style, layout);
+    cyTooltips(cy, function (target) {
+      if (target.isEdge()) return [target.data("first") + " vs " + target.data("second"), [[opts.metric || "Similarity", fmt(target.data("value"))]]];
+      return [target.data("full"), [["Sum of shown similarities", fmt(target.data("weight"))]]];
+    });
   }
 
   // ---------------------------------------------------------------- circos (chord diagram)
@@ -697,11 +723,13 @@
     colorBar(svg, 12, size - 34 + (narrow(W) ? 40 : 0), narrow(W) ? 110 : 160, d3.min(positive, function (p) { return p.value; }), d3.max(positive, function (p) { return p.value; }), t, "low to high");
   }
 
-  // ---------------------------------------------------------------- network coloured by cluster (canvas)
-  // net: parsed edge list, quality: result of core.clusterQuality, clusters: [{ name, members }]
+  // ---------------------------------------------------------------- network coloured by cluster
+  // net: parsed edge list, quality: result of core.clusterQuality, clusters: [{ name, members }], opts: { layout }
+  // Layout "clusters" places every cluster as its own patch; the others are Cytoscape layouts.
   // Returns legend items [{ label, color }].
-  function graph(el, net, quality, clusters) {
-    clear(el, "graph");
+  function graph(el, net, quality, clusters, opts) {
+    clear(el);
+    opts = opts || {};
     var t = theme(), N = net.nodes.length;
     if (N > 3000) { emptyState(el, "The network has " + N + " nodes; the drawing is skipped above 3000 nodes. The table and histogram still cover all of it. Use Open in NORMA below to view the network."); return []; }
     // the 8 largest clusters get a colour, the rest share a neutral one
@@ -710,47 +738,50 @@
     var colorOf = {}, legendItems = [];
     ranked.slice(0, 8).forEach(function (r, k) { colorOf[r.i] = t.series[k]; legendItems.push({ label: clusters[r.i].name + " (" + r.size + ")", color: t.series[k] }); });
     if (ranked.length > 8 || quality.unassignedNodes > 0) legendItems.push({ label: "Other clusters / unassigned", color: t.neutral });
-    var W = chartWidth(el), H = Math.max(380, Math.min(560, W * 0.7)), ratio = global.devicePixelRatio || 1;
-    var canvas = document.createElement("canvas");
-    canvas.width = W * ratio; canvas.height = H * ratio;
-    canvas.style.width = W + "px"; canvas.style.height = H + "px";
-    canvas.setAttribute("role", "img");
-    canvas.setAttribute("aria-label", "Network coloured by cluster");
-    el.appendChild(canvas);
-    var ctx = canvas.getContext("2d");
-    ctx.scale(ratio, ratio);
-    var nodes = net.nodes.map(function (name, i) { return { id: i, name: name, cluster: quality.membership[i] }; });
-    var links = net.edges.map(function (e) { return { source: e.s, target: e.t, w: e.w }; });
-    var maxW = d3.max(net.edges, function (e) { return e.w; }) || 1, radius = N > 600 ? 3 : N > 150 ? 4 : 6;
-    function draw() {
-      ctx.clearRect(0, 0, W, H);
-      ctx.strokeStyle = t.neutral;
-      ctx.globalAlpha = 0.5;
-      links.forEach(function (l) {
-        ctx.lineWidth = 0.6 + 2 * l.w / maxW;
-        ctx.beginPath(); ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); ctx.stroke();
-      });
-      ctx.globalAlpha = 1;
-      nodes.forEach(function (d) {
-        ctx.beginPath(); ctx.arc(d.x, d.y, radius, 0, 2 * Math.PI);
-        ctx.fillStyle = colorOf[d.cluster] || t.neutral; ctx.fill();
-        ctx.lineWidth = 1.5; ctx.strokeStyle = t.surface; ctx.stroke();
-      });
-    }
-    var sim = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).distance(N > 300 ? 18 : 34).strength(0.6))
-      .force("charge", d3.forceManyBody().strength(N > 300 ? -18 : -60))
-      .force("x", d3.forceX(W / 2).strength(0.05)).force("y", d3.forceY(H / 2).strength(0.07))
-      .on("tick", function () {
-        nodes.forEach(function (d) { d.x = Math.max(8, Math.min(W - 8, d.x)); d.y = Math.max(8, Math.min(H - 8, d.y)); });
-        draw();
-      });
-    activeSimulations.graph = sim;
-    canvas.addEventListener("mousemove", function (e) {
-      var rect = canvas.getBoundingClientRect(), hit = sim.find(e.clientX - rect.left, e.clientY - rect.top, 12);
-      if (hit) showTip(e, hit.name, [["Cluster", hit.cluster >= 0 ? clusters[hit.cluster].name : "none"]]); else hideTip();
+    var W = chartWidth(el), H = Math.max(380, Math.min(580, W * 0.75));
+    var size = N > 600 ? 7 : N > 150 ? 11 : 18, showLabels = N <= 60;
+    var maxW = d3.max(net.edges, function (e) { return e.w; }) || 1;
+    var elements = net.nodes.map(function (name, i) {
+      var c = quality.membership[i];
+      return { data: { id: "n" + i, label: showLabels ? clip(name, 12) : "", full: name, cluster: c, clusterName: c >= 0 ? clusters[c].name : "none", color: colorOf[c] || t.neutral } };
     });
-    canvas.addEventListener("mouseleave", hideTip);
+    net.edges.forEach(function (e, k) { elements.push({ data: { id: "e" + k, source: "n" + e.s, target: "n" + e.t, w: e.w, rel: e.w / maxW } }); });
+    var style = [
+      { selector: "node", style: { "background-color": "data(color)", "border-color": t.surface, "border-width": 1.5, width: size, height: size,
+        label: "data(label)", color: t.text, "font-size": 10, "text-margin-y": -4, "text-outline-color": t.surface, "text-outline-width": 2 } },
+      { selector: "edge", style: { width: "mapData(rel, 0, 1, 0.8, 3)", "line-color": t.neutral, opacity: 0.55, "curve-style": N > 400 ? "haystack" : "straight" } },
+      { selector: "node:selected", style: { "border-color": t.text, "border-width": 3 } }
+    ];
+    var layoutName = opts.layout || (N > 500 ? "clusters" : "force"), layout;
+    if (layoutName === "clusters") {
+      // every cluster is a spiral patch; the patches sit on a ring, largest first
+      var groups = {}, order = [];
+      quality.membership.forEach(function (c, i) { var key = c >= 0 ? c : -1; if (!groups[key]) { groups[key] = []; order.push(key); } groups[key].push(i); });
+      order.sort(function (a, b) { return groups[b].length - groups[a].length; });
+      var radii = order.map(function (key) { return size * 0.9 * Math.sqrt(groups[key].length) + size; }), ring = 0;
+      radii.forEach(function (r) { ring += 2 * r + size; });
+      ring = Math.max(ring / (2 * Math.PI), d3.max(radii) + size);
+      var position = {}, angle = 0;
+      order.forEach(function (key, k) {
+        var half = (2 * radii[k] + size) / (2 * ring * 2 * Math.PI) * 2 * Math.PI;
+        angle += half;
+        var cx = ring * Math.cos(angle), cy0 = ring * Math.sin(angle);
+        groups[key].forEach(function (i, m) {
+          var rr = size * 0.9 * Math.sqrt(m + 0.5), a = m * 2.399963; // golden-angle spiral
+          position["n" + i] = { x: cx + rr * Math.cos(a), y: cy0 + rr * Math.sin(a) };
+        });
+        angle += half;
+      });
+      layout = { name: "preset", positions: function (node) { return position[node.id()]; }, fit: true, padding: 24 };
+    } else {
+      layout = cyLayout(layoutName, { padding: 24, idealEdgeLength: function () { return N > 300 ? 30 : 50; }, nodeRepulsion: function () { return N > 300 ? 20000 : 90000; },
+        numIter: N > 800 ? 300 : 1000 });
+    }
+    var cy = startCy(el, cyBox(el, H), elements, style, layout);
+    cyTooltips(cy, function (target) {
+      if (target.isEdge()) return null;
+      return [target.data("full"), [["Cluster", target.data("clusterName")], ["Neighbours", String(target.degree())]]];
+    });
     return legendItems;
   }
 
@@ -775,6 +806,7 @@
 
   // The plot inside a chart container: { kind: "svg" | "canvas", node, width, height } in CSS pixels, or null.
   function exportSource(el) {
+    if (el.__cy) return { kind: "cy", cy: el.__cy, width: el.__cy.width(), height: el.__cy.height() };
     var svg = el.querySelector("svg");
     if (svg) return { kind: "svg", node: svg, width: +svg.getAttribute("width"), height: +svg.getAttribute("height") };
     var canvas = el.querySelector("canvas");
@@ -876,6 +908,13 @@
       ctx.fillText(opts.title, 8 * scale, 22 * scale);
     }
     ctx.imageSmoothingQuality = "high";
+    if (source.kind === "cy") { // Cytoscape redraws itself at the requested resolution, so the image stays sharp
+      var shot = new Image();
+      shot.onload = function () { ctx.drawImage(shot, 0, band * scale, w * scale, source.height * scale); done(canvas); };
+      shot.onerror = function () { fail("The browser could not draw the network as an image."); };
+      shot.src = source.cy.png({ scale: scale, full: false });
+      return;
+    }
     ctx.drawImage(source.node, 0, band * scale, w * scale, source.height * scale);
     done(canvas);
   }
@@ -912,7 +951,7 @@
   VICTOR.charts = {
     theme: theme, sequential: sequential, readableOn: readableOn, fmt: fmt,
     columns: columns, histogram: histogram, bars: bars, upset: upset, map: map, heatmap: heatmap, sankey: sankey,
-    network: network, chord: chord, graph: graph,
+    network: network, chord: chord, graph: graph, fitNetwork: fitNetwork, NETWORK_LAYOUTS: NETWORK_LAYOUTS,
     exportImage: exportImage, exportSource: exportSource, EXPORT_FORMATS: EXPORT_FORMATS, TITLE_BAND: TITLE_BAND, download: download
   };
 })(window);

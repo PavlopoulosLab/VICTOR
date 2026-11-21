@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- Only this site's own scripts and styles may run, and the page may not contact any server. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<!-- Only this site's own scripts and styles may run, and the page may not contact any server.
+     The one style hash is the small style block that Cytoscape.js adds for its drawing area. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'sha256-pgvDUBa4IjFA2yuSJ2cqcyxmNYJMborsd0ORcRv9vw8='; img-src 'self' data: blob:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>VICTOR: comparing cluster sets</title>
 <meta name="description" content="VICTOR is a visual analytics web application for comparing cluster sets. It runs entirely in your browser.">
@@ -353,13 +354,10 @@ cluster3	F06,F11</pre></div>
             <input type="range" id="vizThreshold" min="0" max="1" step="0.01" value="0">
             <output id="vizThresholdValue" for="vizThreshold">0.00</output>
           </label>
-          <label class="field" id="netLayoutField" hidden><span>Layout</span>
-            <select id="netLayout">
-              <option value="force">Force-directed</option>
-              <option value="circle">Circle</option>
-              <option value="grid">Grid</option>
-            </select>
-          </label>
+          <span class="field" id="netLayoutField" hidden><label for="netLayout">Layout</label>
+            <select id="netLayout"></select>
+            <button class="btn small" id="netFit" type="button">Fit to view</button>
+          </span>
           <span class="spacer"></span>
           <button class="btn small export-btn" type="button" data-chart="vizChart">Export image&hellip;</button>
         </div>
@@ -433,11 +431,16 @@ cluster3	F06,F11</pre></div>
           <div class="tiles" id="qualityTiles"></div>
           <div class="grid2">
             <div class="card">
-              <header><h3>Network coloured by cluster</h3><p>The eight largest clusters are coloured</p><button class="btn small export-btn" type="button" data-chart="chartGraph" data-name="victor_network" data-title="Network coloured by cluster">Export</button></header>
+              <header><h3>Network coloured by cluster</h3>
+                <div class="toolbar">
+                  <select id="graphLayout" aria-label="Layout of the network"></select>
+                  <button class="btn small" id="graphFit" type="button">Fit to view</button>
+                  <button class="btn small export-btn" type="button" data-chart="chartGraph" data-name="victor_network" data-title="Network coloured by cluster">Export</button>
+                </div></header>
               <div class="chart" id="chartGraph"></div>
               <div class="legend" id="graphLegend"></div>
               <div class="norma-note">
-                <p>This is a quick preview. For a better view of the clusters on the network (pie-chart nodes, group outlines, layouts, 3D), open it in NORMA.</p>
+                <p>Scroll or pinch to zoom, drag to pan or to move nodes; the eight largest clusters are coloured. For pie-chart nodes, group outlines and 3D, open it in NORMA.</p>
                 <button class="btn norma-btn compact" id="normaOpenInline" type="button"><img src="img/norma-icon.svg" alt="" width="22" height="22"><span>Open in <b>NORMA</b></span></button>
               </div>
               <p class="hint" id="normaStatusInline" role="status"></p>
@@ -624,7 +627,7 @@ N2	N11	0.3</pre>
           <li><b>Map</b>: every cluster set as a point, placed by multidimensional scaling so that similar sets are close. The note under the title says how faithfully the distances are reproduced.</li>
           <li><b>Pair bars</b>: one bar per pair of cluster sets, sorted by similarity. Limited to the 30 most similar pairs when there are more.</li>
           <li><b>Sankey</b>: cluster sets as blocks joined by bands. Band thickness is relative to the other pairs shown, not an absolute scale.</li>
-          <li><b>Network</b>: cluster sets as nodes; thicker edges mean more similar sets. Drag nodes to rearrange.</li>
+          <li><b>Network</b>: cluster sets as nodes; thicker edges mean more similar sets. Choose between force-directed, concentric, circle, grid, tree and random layouts; scroll or pinch to zoom, drag the background to pan and drag nodes to move them.</li>
           <li><b>Circos</b>: cluster sets as arcs; ribbons join the pairs, shaded by similarity.</li>
           <li><b>UpSet</b> (step 1): appears when the selected sets do not contain the same objects. Each column is a combination of sets, marked by the filled dots; its bar counts the objects found in exactly those sets and no others. The column with every dot filled is what the Intersection filter keeps.</li>
         </ul>
@@ -695,6 +698,7 @@ N2	N11	0.3</pre>
 <footer>VICTOR runs entirely in your browser. Open-source under the AGPL-3.0 licence.</footer>
 
 <script src="lib/d3.v5.min.js?v=15"></script>
+<script src="lib/cytoscape.min.js?v=3.30.2"></script>
 <script src="js/core.js?v=15"></script>
 <script src="js/charts.js?v=15"></script>
 <script src="js/examples.js?v=15"></script>

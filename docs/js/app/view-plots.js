@@ -41,6 +41,7 @@ function renderPlotControls(r, pairs) {
   $("vizThresholdField").hidden = !PAIR_PLOTS[v.kind];
   setPressed($("vizKind"), "kind", v.kind);
   $("netLayoutField").hidden = v.kind !== "network";
+  if (!$("netLayout").options.length) fillSelect($("netLayout"), Object.keys(G.NETWORK_LAYOUTS).map(function (k) { return [k, G.NETWORK_LAYOUTS[k]]; }), v.layout);
   $("netLayout").value = v.layout;
   empty($("vizMetricInfo"));
   $("vizMetricInfo").appendChild(infoButton(v.metric));

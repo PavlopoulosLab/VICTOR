@@ -97,7 +97,7 @@ The 20 basic metrics and the Adjusted Mutual Information grow with the number of
 ## Code
 
 * [`docs/js/core.js`](docs/js/core.js): parsing, filters, the 27 metrics, cluster matching and network quality measures. No dependencies.
-* [`docs/js/charts.js`](docs/js/charts.js): the plots, drawn with the bundled d3 v5, and the image export.
+* [`docs/js/charts.js`](docs/js/charts.js): the plots and the image export. Charts are drawn with d3 v5 and the two network views with Cytoscape.js 3.30.2 (MIT licence); both libraries are bundled in `docs/lib`, so nothing is loaded from other sites.
 * [`docs/js/app/`](docs/js/app): the user interface, as ES modules:
   * `main.js` (entry point, tabs, render), `events.js` (event wiring), `state.js`, `config.js` (constants, metric explanations, examples), `dom.js` (helpers)
   * `data.js` (loading, filters, comparison, networks)

@@ -1,5 +1,5 @@
 /* VICTOR app: Event wiring, one small function per area of the interface. */
-import { C, EXAMPLES, ORIGINAL_TEN, RECOMMENDED, global } from "./config.js";
+import { C, EXAMPLES, G, ORIGINAL_TEN, RECOMMENDED, global } from "./config.js";
 import { state } from "./state.js";
 import { $, downloadCsv, fillSelect } from "./dom.js";
 import { compare, computeQuality, loadClusterFiles, loadExample, loadNetworkFile, refresh } from "./data.js";
@@ -126,6 +126,7 @@ function initPlots() {
   on("vizMetric", "change", function () { state.viz.metric = this.value; state.viz.threshold = null; render(); });
   on("vizThreshold", "input", function () { state.viz.threshold = +this.value; render(); });
   on("netLayout", "change", function () { state.viz.layout = this.value; render(); });
+  on("netFit", "click", function () { G.fitNetwork($("vizChart")); });
   initExportDialog();
 }
 
@@ -135,6 +136,8 @@ function initQuality() {
   onChoice("gridMeasure", "measure", function (measure) { state.gridMeasure = measure; renderQualityGrid(); });
   on("downloadGridCsv", "click", function () { downloadCsv(gridCsvRows(), "victor_sets_on_networks.csv"); });
   on("downloadQualityCsv", "click", function () { downloadCsv(qualityCsvRows(), "victor_cluster_quality.csv"); });
+  on("graphLayout", "change", function () { state.graphLayout = this.value; render(); });
+  on("graphFit", "click", function () { G.fitNetwork($("chartGraph")); });
   on("normaOpen", "click", openInNorma);
   on("normaOpenInline", "click", openInNorma);
   on("normaDownload", "click", downloadNormaFiles);

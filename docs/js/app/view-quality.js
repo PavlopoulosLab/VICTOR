@@ -103,7 +103,9 @@ export function renderQuality() {
     render();
   });
   $("qualityDetailTitle").textContent = "In detail: " + set.name;
-  var legendItems = G.graph($("chartGraph"), state.network, q, q.clusters), legend = $("graphLegend");
+  var graphLayouts = [["", "Automatic layout"], ["clusters", "Clusters apart"]].concat(Object.keys(G.NETWORK_LAYOUTS).map(function (k) { return [k, G.NETWORK_LAYOUTS[k]]; }));
+  fillSelect($("graphLayout"), graphLayouts, state.graphLayout);
+  var legendItems = G.graph($("chartGraph"), state.network, q, q.clusters, { layout: state.graphLayout }), legend = $("graphLegend");
   empty(legend);
   legendItems.forEach(function (it) {
     var span = el("span"), dot = el("i");

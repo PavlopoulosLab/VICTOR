@@ -23,6 +23,7 @@ export var state = {
   networkName: "",
   networks: [],        // every loaded network: { id, name, net }; state.network / networkName mirror the active one
   networkId: null,
+  graphLayout: "",     // layout of the network coloured by cluster; "" lets VICTOR choose from the network's size
   gridMeasure: "modularity",
   gridOffSets: {},     // cluster set ids left out of the sets x networks grid
   gridOffNets: {},     // network ids left out of it

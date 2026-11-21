@@ -37,7 +37,7 @@ export function syncExportDialog() {
     $("exportInfo").textContent = pw.toLocaleString() + " \u00d7 " + ph.toLocaleString() + " px \u00b7 " + dpi + " dpi when printed at the on-screen size, " +
       inches(w, 96) + " \u00d7 " + inches(h, 96) + " in (" + cm(w, 96) + " \u00d7 " + cm(h, 96) + " cm) \u00b7 " +
       inches(pw, 300) + " \u00d7 " + inches(ph, 300) + " in (" + cm(pw, 300) + " \u00d7 " + cm(ph, 300) + " cm) at 300 dpi" +
-      (source.kind === "canvas" ? " \u00b7 this plot is drawn as pixels, so it does not get sharper above the screen's own resolution" : "") +
+      (source.kind === "cy" ? " \u00b7 networks are saved as images; SVG is not available for them" : "") +
       (choice.format === "pdf" ? " \u00b7 the PDF holds the plot as an image" : "");
   }
 }
@@ -71,8 +71,7 @@ export function runExport() {
   if (!relight) { G.exportImage($(exportTarget.chartId), choice, finish); return; }
   document.documentElement.setAttribute("data-theme", "light");
   render();
-  var animated = exportTarget.chartId === "chartGraph" || (exportTarget.chartId === "vizChart" && state.viz.kind === "network" && state.viz.layout === "force");
-  setTimeout(function () { G.exportImage($(exportTarget.chartId), choice, finish); }, animated ? 2500 : 60); // moving layouts get time to settle
+  setTimeout(function () { G.exportImage($(exportTarget.chartId), choice, finish); }, 120); // after the redraw
 }
 
 export function initExportDialog() {
