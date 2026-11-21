@@ -17,13 +17,40 @@ VICTOR does not run clustering itself and does not pick a "best" result. It runs
   * *Set overlaps / matching*: Maximum-Match, Optimal-Match Accuracy (Hungarian), F-Measure, Purity (Meila–Heckerman), Van Dongen (normalized), B-Cubed Precision, Recall and F-Score, Element-Centric Similarity
   * *Mutual information*: three Normalized Mutual Information variants, Adjusted Mutual Information, Normalized Variation of Information, Variation of Information (normalized by log n and by joint entropy), Homogeneity, Completeness
   * *Overlapping clusterings*: Omega Index, Overlapping NMI. These two also accept sets in which an object belongs to several clusters.
+  * Compare every pair of the selected sets, or each set against one reference such as a gold standard.
+  * Every metric has a one-line explanation next to it, and a "Recommended" preset picks six that are corrected for chance or easy to read.
 * **Match clusters** between two sets: which cluster of one corresponds best to which cluster of the other, and how many objects they share.
-* **Visualize** any metric as a bar plot, hierarchical heatmap, Sankey plot, network or circos plot, and hide the pairs below a chosen similarity.
-* **Check cluster quality on a network**: conductance, internal density and cut ratio per cluster, plus modularity and coverage for the whole set.
+* **Visualize** any metric in seven ways, and hide the pairs below a chosen similarity:
+  * *Heatmap* with hierarchical clustering (the default), *Ranking* of the sets by their average similarity to the others, and a *Similarity map* that places similar sets close together.
+  * *Pair bars*, *Sankey*, *Network* (six layouts, zoom, pan and drag) and *Circos*.
+  * Sankey and circos can also show the **objects flowing between clusters**: click a cluster to follow its objects through every set.
+* **Check cluster quality on networks**: load one or several networks and get conductance, internal density and cut ratio per cluster, plus modularity and coverage per cluster set. A grid scores every cluster set on every network, with tick boxes for what to include.
 * **Open in NORMA**: send the network and the clusters of every loaded set to [NORMA](https://normaviz.org) as annotations, with each node drawn as a pie chart of the clusters it belongs to. The data passes directly between the two pages in your browser.
 * **Export** every plot as PNG, SVG, PDF, JPEG or WebP at up to six times the on-screen resolution, and every table as CSV.
 
-The interface has a light and a dark theme and works on phones.
+* **Use it from other programs** through links, `postMessage` or JavaScript; see [API](#api).
+
+The interface starts on a home page, guides through three numbered steps (Load & prepare, Compare, Plots), has a light and a dark theme and works on phones.
+
+## What's new (01/2027)
+
+This version replaces the R/Shiny application of the 2021 publication with one that runs entirely in the browser. Compared with it:
+
+| | 2021 version | This version |
+|---|---|---|
+| Technology | R/Shiny on a server | Static page; nothing installed, nothing uploaded |
+| Comparison metrics | 10 | 27, including chance-corrected ones and two for overlapping clusters |
+| Help choosing metrics | None | One-line explanation per metric, "Recommended" preset |
+| Which pairs | Every pair | Every pair, or each set against a reference |
+| Sets with different objects | Manual filters | Detected automatically, with the fix offered as one click and an UpSet plot of what the sets share |
+| Plots | Bar plot, heatmap, Sankey, network, circos | Plus ranking and similarity map; cluster-level Sankey and circos that follow objects; interactive networks with six layouts |
+| Networks | One network, conductance | Several networks; conductance, internal density, cut ratio, modularity, coverage; sets-by-networks grid |
+| Export | Figures | PNG, SVG, PDF, JPEG or WebP at up to 6×, CSV for every table |
+| Other tools | None | Open in NORMA with pie-chart nodes; API by link, `postMessage` and JavaScript |
+| Limits | 1 MB per file, 20,000 edges | 50 MB per file; half a million objects compare in well under a second |
+| Devices | Desktop | Desktop and phone, light and dark theme |
+
+The same list is in the application under Help.
 
 ## File formats
 

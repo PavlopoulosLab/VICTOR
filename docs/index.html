@@ -569,6 +569,24 @@ VICTOR.api.version         // "1.0"</pre>
 
   <section class="tab" id="tab-help" role="tabpanel">
     <div class="help">
+      <div class="whats-new">
+        <h2>What's new <span class="badge">Latest update: 01/2027</span></h2>
+        <p>This version replaces the R/Shiny application described in the 2021 publication. Everything now runs in your browser: nothing to install and nothing uploaded. Compared with the previous version:</p>
+        <dl>
+          <dt>More metrics</dt><dd>27 comparison metrics instead of 10, among them chance-corrected ones (Adjusted Mutual Information), Optimal-Match Accuracy, B-Cubed scores, Element-Centric Similarity, and the Omega Index and Overlapping NMI, which also compare overlapping clusters. Each metric has a one-line explanation next to it, and a "Recommended" preset helps choosing.</dd>
+          <dt>Guided workflow</dt><dd>A home page and three numbered steps: Load &amp; prepare, Compare, Plots. When the loaded sets do not contain the same objects, VICTOR says so and offers the fix as one click.</dd>
+          <dt>Choose what to compare</dt><dd>Every pair of the selected sets, or each set against one reference such as a gold standard.</dd>
+          <dt>New plots</dt><dd>An UpSet plot of the objects the sets share, a ranking of the sets by average similarity, and a similarity map. The heatmap is now the default, since one bar per pair does not scale.</dd>
+          <dt>Interactive plots</dt><dd>Sankey and circos plots can show the objects flowing between clusters: click a cluster to follow its objects through every set. Networks have six layouts with zoom, pan and drag.</dd>
+          <dt>Networks</dt><dd>Several networks can be loaded. Besides conductance there are internal density, cut ratio, modularity and coverage, and a grid that scores every cluster set on every network.</dd>
+          <dt>Open in NORMA</dt><dd>The network and the clusters of every loaded set open in NORMA with one click, with nodes drawn as pie charts.</dd>
+          <dt>Export</dt><dd>Every plot as PNG, SVG, PDF, JPEG or WebP at up to six times the screen resolution, and every table as CSV.</dd>
+          <dt>API</dt><dd>Other programs can open VICTOR with their data and read the results back, by a link, by <code>postMessage</code> or through JavaScript. See the API tab.</dd>
+          <dt>Larger data</dt><dd>Files up to 50 MB instead of 1 MB. Half a million objects are compared in well under a second; metrics that are too costly for the loaded data are left out with a notice instead of stopping everything.</dd>
+          <dt>Everywhere</dt><dd>Works on phones, with a light and a dark theme, and eight bundled examples.</dd>
+        </dl>
+        <p class="hint mt8">One difference to be aware of: the Normalized Mutual Information by Danon of the first metric list is not offered, because it gives the same values as the one by Fred &amp; Jain.</p>
+      </div>
       <div>
         <h2>What VICTOR does</h2>
         <p>VICTOR compares cluster sets: the results of different clustering algorithms, or of one algorithm with different parameters, on the same objects. It scores how similar every pair of results is and shows the scores as tables and plots. It does not run clustering itself and it does not pick a best result. Everything is calculated in your browser; your files are never sent anywhere.</p>

@@ -422,3 +422,7 @@ td.best { font-weight: 700; }
 
 /* Cytoscape drawings: the library positions its canvases inside this box */
 .cy-box { position: relative; width: 100%; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; touch-action: none; }
+
+/* "What's new" block at the top of Help */
+.whats-new { border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); padding: 18px 20px; }
+.whats-new h2 .badge { font-size: 12px; font-weight: 600; margin-left: 8px; background: var(--accent); color: var(--on-accent); vertical-align: middle; }

@@ -1,5 +1,7 @@
 Patch notes
 
+2027/01 release: see README.md, "What's new (01/2027)", and Help in the application. The entries dated 2026/11/21 below make up that release.
+
 2026/11/21
 -New static web application in docs/ (HTML and JavaScript, no server or R needed). All calculations run in the browser.
 -12 additional comparison metrics (22 in total): Rand, F-Measure, Meila-Heckerman, normalized Van Dongen, B-Cubed precision/recall/F, NMI by larger entropy, Adjusted Mutual Information, normalized Variation of Information, Homogeneity, Completeness.
