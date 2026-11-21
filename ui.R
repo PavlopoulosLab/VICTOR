@@ -63,31 +63,37 @@ ui <- fluidPage(
                       sidebarLayout(
                         sidebarPanel(
                           pickerInput("metrics", "Choose Metrics to Calculate:", # metrics selection
-                                      c("Adjusted Rand Index" = "adjrand",
-                                        #"Chi-Squared Coefficient" = "chisq",
-                                        "Fowlkes-Mallows index" = "fmi",
-                                        "Jaccard Index" = "jaccard",
-                                        #"Mirkin Metric" = "mirkin",
-                                        "Overlap Coefficient" = "overlap",
-                                        #"Partition Difference" = "pd",
-                                        #"Rand Index" = "rand",
-                                        #"Sorensen-Dice Coefficient" = "sdc",
-                                        #"Simple Matching Coefficient" = "smc",
-                                        #"Tanimoto index" = "tanimoto",
-                                        #"Tversky index" = "tversky",
-                                        "Wallace Criterion Type 1" = "wallace1",
-                                        "Wallace Criterion Type 2" = "wallace2",
-                                        #"F-Measure" = "f",
-                                        #"Meila-Heckerman Measure" = "mhm",
-                                        "Maximum-Match Measure" = "mmm",
-                                        #"Van Dongen Measure" = "vdm",
-                                        #"Joint Entropy" = "jent",
-                                        #"Mutual Information" = "mi",
-                                        "Normalized Mutual Information by Strehl Ghosh" = "nmi1",
-                                        "Normalized Mutual Information by Fred and Jain" = "nmi2",
-                                        #"Normalized Mutual Informatio by Danon" = "nmi3",
-                                        "Normalized Variation of Information" = "nvi"
-                                        #"Variation of Information" = "vi"
+                                      # codes listed in extraMetricTypes (metrics.R) are calculated by VICTOR, the rest by mclustcomp
+                                      # mclustcomp metrics left out: chisq, mirkin, pd, sdc, smc, tanimoto, tversky, jent, mi (unbounded, redundant or parametric); vdm and vi are offered normalized
+                                      list(
+                                        "Counting Pairs" = c(
+                                          "Adjusted Rand Index" = "adjrand",
+                                          "Rand Index" = "rand",
+                                          "Fowlkes-Mallows index" = "fmi",
+                                          "Jaccard Index" = "jaccard",
+                                          "Overlap Coefficient" = "overlap",
+                                          "Wallace Criterion Type 1" = "wallace1",
+                                          "Wallace Criterion Type 2" = "wallace2"
+                                        ),
+                                        "Set Overlaps / Matching" = c(
+                                          "Maximum-Match Measure" = "mmm",
+                                          "F-Measure" = "f",
+                                          "Meila-Heckerman Measure" = "mhm",
+                                          "Van Dongen Measure (normalized, inverted)" = "vdm_norm",
+                                          "B-Cubed Precision" = "bcubed_p",
+                                          "B-Cubed Recall" = "bcubed_r",
+                                          "B-Cubed F-Score" = "bcubed_f"
+                                        ),
+                                        "Mutual Information" = c(
+                                          "Normalized Mutual Information by Strehl Ghosh" = "nmi1",
+                                          "Normalized Mutual Information by Fred and Jain" = "nmi2",
+                                          "Normalized Mutual Information by Danon" = "nmi3",
+                                          "Adjusted Mutual Information" = "ami",
+                                          "Normalized Variation of Information" = "nvi",
+                                          "Variation of Information (normalized by log n, inverted)" = "vi_norm",
+                                          "Homogeneity" = "homogeneity",
+                                          "Completeness" = "completeness"
+                                        )
                                       ), options = list(`actions-box` = TRUE), multiple = TRUE),
                           actionButton("executeCC", icon("angle-double-right"), label = "Execute", class ="executeButton"),
                           div(id='fileSelection_CC', class='leftPanel') # for checkbox file selection
@@ -192,7 +198,10 @@ ui <- fluidPage(
                                                visNetworkOutput("network", height = "70vh"),
                                                dataTableOutput("condDataTable")),
                                       
-                                      tabPanel("Conductance Histogram", plotOutput("histConductance"))
+                                      tabPanel("Conductance Histogram", plotOutput("histConductance")),
+                                      tabPanel("Cluster Quality",
+                                               htmlOutput("clusterQualitySummary"),
+                                               dataTableOutput("clusterQualityTable"))
                           )
                         )
                       )
@@ -200,6 +209,7 @@ ui <- fluidPage(
              tabPanel("Help", tabsetPanel(id = "hTabs", 
                                           tabPanel("The File Handling Tab", div(id='help_file')),
                                           tabPanel("Metrics", div(id='help_metric')),
+                                          tabPanel("Additional Metrics", div(id='help_metric_extra')),
                                           tabPanel("Examples", div(id='help_examples')),
                                           tabPanel("The Compare Cluster Sets Tab", div(id='help_clusterings')),
                                           tabPanel("The Metric Barplots Tab", div(id='help_barplots')),

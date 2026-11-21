@@ -1,6 +1,7 @@
 server <- function(input, output, session) {
   
   source("global.R", local=TRUE)
+  source("metrics.R", local=TRUE) # extra comparison metrics and network cluster quality measures
   
   session$sendCustomMessage("handler_disableTabs", T) # disable most tab panels until files are uploaded/analyzed
   
@@ -15,10 +16,10 @@ server <- function(input, output, session) {
       With <b>VICTOR</b> one can:</br>
        &bull; Handle multiple clustering results simultaneously</br>
        &bull; Apply thresholds on the cluster sizes </br>
-       &bull; Compare different clustering results using ten different comparison metrics. </br>
+       &bull; Compare different clustering results using 22 different comparison metrics. </br>
        &bull; Visualize cluster set comparisons using interactive heatmaps, bar plots, networks, sankey and circos plots</br>
        &bull; Apply thresholds on the cluster set comparison metrics</br>
-       &bull; Calculate the cluster representation on a given network</br>
+       &bull; Calculate the cluster representation on a given network (conductance, internal density, cut ratio, modularity, coverage)</br>
        &bull; Export publication-ready figures</br>
     </p></div>"
   })
@@ -124,8 +125,7 @@ server <- function(input, output, session) {
                 break
               }
               tryCatch({
-                temp <- mclustcomp(x, y, types = metrics)
-                if (!is.na(match("nvi", temp$types))) temp[temp$types=="nvi", ]$scores <- 1 - temp[temp$types=="nvi", ]$scores # inverting nvi in [0, 1]
+                temp <- compareClusterSets(x, y, metrics) # mclustcomp metrics (nvi inverted in [0, 1]) plus the extra metrics of metrics.R
               }, warning = function(w) {
                 print(paste("Warning:  ", w))
               }, error = function(e) {
@@ -285,6 +285,12 @@ server <- function(input, output, session) {
         }, error = function(e) {
           session$sendCustomMessage("handler_alert", paste("Error :  ", e, "All objects contained in the clustering file must be present in the network."))
         }, finally = {})
+        tryCatch({
+          runClusterQuality(annotation_file_list)
+        }, error = function(e) {
+          print(paste("Error :  ", e))
+          session$sendCustomMessage("handler_alert", paste("Could not calculate the cluster quality measures. ", e))
+        })
         updateTabsetPanel(session, "cTabs",
                           selected = "Conductance Histogram"
         )
@@ -983,6 +989,28 @@ server <- function(input, output, session) {
     return (epair)
   }
   
+  #---------------cluster quality table (metrics.R)---------------
+  runClusterQuality <- function(annotation_file_list){
+    edge_matrix <- cbind(trimws(as.character(network_file_table[[1]])), trimws(as.character(network_file_table[[2]])))
+    if (ncol(network_file_table) >= 3) edge_matrix <- cbind(edge_matrix, as.character(network_file_table[[3]]))
+    graph <- createGraph(edge_matrix)
+    quality <- clusterQuality(graph, as.character(annotation_file_list[[1]]), strsplit(as.character(annotation_file_list[[2]]), ","))
+    output$clusterQualitySummary <- renderText({
+      paste("<p><b>Modularity:</b> ", round(quality$modularity, 4),
+            " &nbsp; <b>Coverage:</b> ", round(quality$coverage, 4),
+            "</br>Network vertices outside every cluster (counted as singletons for modularity): ", quality$unassignedVertices,
+            "</br>Cluster objects absent from the network (ignored): ", quality$missingObjects, "</p>", sep = "")
+    })
+    output$clusterQualityTable <- DT::renderDataTable(quality$table, server = FALSE, rownames = FALSE,
+                                                      extensions = 'Buttons',
+                                                      options = list(
+                                                        pageLength = 10,
+                                                        "dom" = 'T<"clear">lBfrtip',
+                                                        buttons = list('copy', 'csv', 'excel', 'pdf', 'print')
+                                                      ))
+    return(T)
+  }
+
   #---------------main---------------
   runConductance <- function(network_file_matrix, network_file_table, annotation_file_list){
     if(ncol(network_file_matrix)==3){
