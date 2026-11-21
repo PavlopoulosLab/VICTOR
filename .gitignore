@@ -1,0 +1,3 @@
+# never publish the copyrighted article or macOS system files
+*.pdf
+.DS_Store
