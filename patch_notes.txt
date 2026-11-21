@@ -7,6 +7,8 @@ Patch notes
 -Export dialog for every plot: PNG, SVG, PDF, JPEG or WebP, up to 6x resolution, theme/white/transparent background.
 -UpSet plot in the Files tab showing which objects the selected cluster sets share, when they differ.
 -Metrics that are too costly for the loaded sets are skipped with a notice; large comparisons ask before running.
+-Several networks can be loaded; a grid scores every cluster set on every network, with tick boxes for what to include. Compare can show every pair or each set against a reference.
+-The interface code is split into ES modules under docs/js/app, with smaller functions.
 -Open in NORMA (normaviz.org): sends the network and the clusters of every loaded set as annotations, with nodes drawn as pie charts; the same data can be downloaded as NORMA files.
 -Network quality is linked to the comparison: one table scores every loaded cluster set on the network, the Compare step shows it for the compared sets, and the home page presents both functions side by side.
 -Home page that explains what VICTOR does and how to start; an "i" button next to every metric shows a one-line explanation on hover, focus or tap.

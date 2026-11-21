@@ -51,7 +51,7 @@ Example files are in [`docs/examples`](docs/examples) and can be loaded from the
 
 ## Running it
 
-VICTOR is a static web application. Serve the `docs` folder with any web server:
+VICTOR is a static web application. Serve the `docs` folder with any web server (the interface is loaded as JavaScript modules, which browsers do not run from a file opened straight from disk):
 
 ```bash
 git clone https://github.com/PavlopoulosLab/VICTOR.git
@@ -77,7 +77,11 @@ The 20 basic metrics and the Adjusted Mutual Information grow with the number of
 
 * [`docs/js/core.js`](docs/js/core.js): parsing, filters, the 27 metrics, cluster matching and network quality measures. No dependencies.
 * [`docs/js/charts.js`](docs/js/charts.js): the plots, drawn with the bundled d3 v5, and the image export.
-* [`docs/js/app.js`](docs/js/app.js): the user interface.
+* [`docs/js/app/`](docs/js/app): the user interface, as ES modules:
+  * `main.js` (entry point, tabs, render), `events.js` (event wiring), `state.js`, `config.js` (constants, metric explanations, examples), `dom.js` (helpers)
+  * `data.js` (loading, filters, comparison, networks)
+  * `view-files.js`, `view-compare.js`, `view-plots.js`, `view-quality.js` (one per screen)
+  * `info.js` (metric explanations), `export-dialog.js` (image export), `norma.js` (NORMA export)
 * [`docs/test/test.html`](docs/test/test.html): self-checks of the calculations. Open it in a browser to run them.
 
 ### Previous R/Shiny version
