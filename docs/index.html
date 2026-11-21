@@ -9,8 +9,8 @@
 <title>VICTOR: comparing cluster sets</title>
 <meta name="description" content="VICTOR is a visual analytics web application for comparing cluster sets. It runs entirely in your browser.">
 <link rel="icon" href="favicon.ico">
-<link rel="stylesheet" href="css/victor.css?v=8">
-<script src="js/theme.js?v=8"></script>
+<link rel="stylesheet" href="css/victor.css?v=10">
+<script src="js/theme.js?v=10"></script>
 </head>
 <body>
 
@@ -92,14 +92,31 @@
   <section class="tab active" id="tab-home" role="tabpanel">
     <div class="home">
       <div class="hero">
-        <h2>How similar are your clusterings?</h2>
-        <p>VICTOR compares the results of different clustering algorithms, or of one algorithm with different settings, on the same objects. It scores every pair of results and shows the scores as tables and plots.</p>
-        <div class="actions">
-          <button class="btn primary" id="homeStart" type="button">Load your cluster sets</button>
-          <button class="btn" id="homeExample" type="button">Try an example</button>
-        </div>
-        <p class="hint">Everything runs in your browser. Your files are never uploaded.</p>
+        <h2>How similar are your clusterings, and how well do they fit your network?</h2>
+        <p>VICTOR compares the results of different clustering algorithms, or of one algorithm with different settings, on the same objects. If you also have the network they came from, it checks how well each result fits it.</p>
+        <p class="hint mt8">Everything runs in your browser. Your files are never uploaded.</p>
       </div>
+
+      <h3 class="home-heading">Two things you can do</h3>
+      <div class="home-grid two">
+        <div class="card home-card feature">
+          <h3>Compare clusterings with each other</h3>
+          <p>Load two or more clustering results and score how similar every pair is, with 27 metrics and five kinds of plots. Answers "do these methods agree?"</p>
+          <div class="actions">
+            <button class="btn primary" id="homeStart" type="button">Load your cluster sets</button>
+            <button class="btn" id="homeExample" type="button">Try an example</button>
+          </div>
+        </div>
+        <div class="card home-card feature">
+          <h3>Check clusterings against a network</h3>
+          <p>Load a network and score how well separated the clusters of each result are on it: conductance, density, modularity and coverage. Answers "which result fits the network best?"</p>
+          <div class="actions">
+            <button class="btn primary" id="homeNetwork" type="button">Open Network quality</button>
+            <button class="btn" id="homeNetworkExample" type="button">Try the network example</button>
+          </div>
+        </div>
+      </div>
+      <p class="hint">The two work together: the cluster sets you load are shared, and once a network is loaded the Compare step also shows how each compared set scores on it.</p>
 
       <h3 class="home-heading">How it works</h3>
       <div class="home-grid three">
@@ -277,6 +294,14 @@ cluster3	F06,F11</pre></div>
             <div class="table-scroll"><table id="resultsTable"></table></div>
             <p class="hint" id="asymmetricNote" class="mt8"></p>
           </div>
+          <div class="card" id="compareNetworkCard">
+            <header>
+              <h3>How each set fits the network</h3>
+              <button class="btn small" id="compareNetworkGo" type="button">Details in Network quality &rarr;</button>
+            </header>
+            <p class="hint mb8" id="compareNetworkHint"></p>
+            <div class="table-scroll" id="compareNetworkWrap"><table id="compareNetworkTable"></table></div>
+          </div>
           <div class="card">
             <header>
               <h3>Maximum cluster match</h3>
@@ -362,6 +387,15 @@ cluster3	F06,F11</pre></div>
       <div class="content">
         <div class="notice" id="qualityMessage" role="status"></div>
         <div id="qualityBody" hidden class="content">
+          <div class="card" id="qualityAllCard">
+            <header>
+              <h3>All loaded cluster sets on this network</h3>
+              <p>Click a row to see that set in detail below</p>
+            </header>
+            <p class="hint mb8">Higher modularity and coverage, and lower conductance, mean clusters that fit the network better. The best value in each column is in bold.</p>
+            <div class="table-scroll"><table id="qualityAllTable"></table></div>
+          </div>
+          <h3 class="section-title" id="qualityDetailTitle"></h3>
           <div class="tiles" id="qualityTiles"></div>
           <div class="grid2">
             <div class="card">
@@ -528,10 +562,10 @@ N2	N11	0.3</pre>
 
 <footer>VICTOR runs entirely in your browser. Open-source under the AGPL-3.0 licence.</footer>
 
-<script src="lib/d3.v5.min.js?v=8"></script>
-<script src="js/core.js?v=8"></script>
-<script src="js/charts.js?v=8"></script>
-<script src="js/examples.js?v=8"></script>
-<script src="js/app.js?v=8"></script>
+<script src="lib/d3.v5.min.js?v=10"></script>
+<script src="js/core.js?v=10"></script>
+<script src="js/charts.js?v=10"></script>
+<script src="js/examples.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
 </body>
 </html>

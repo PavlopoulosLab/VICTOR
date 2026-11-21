@@ -7,6 +7,7 @@ Patch notes
 -Export dialog for every plot: PNG, SVG, PDF, JPEG or WebP, up to 6x resolution, theme/white/transparent background.
 -UpSet plot in the Files tab showing which objects the selected cluster sets share, when they differ.
 -Metrics that are too costly for the loaded sets are skipped with a notice; large comparisons ask before running.
+-Network quality is linked to the comparison: one table scores every loaded cluster set on the network, the Compare step shows it for the compared sets, and the home page presents both functions side by side.
 -Home page that explains what VICTOR does and how to start; an "i" button next to every metric shows a one-line explanation on hover, focus or tap.
 -Interface redesign: numbered steps (Load & prepare, Compare, Plots), one-click fixes when sets contain different objects, metric presets with one-line explanations, a summary of the most and least similar pair, results table with metrics or pairs as rows.
 -Eight bundled examples with descriptions, including the myocardial infarction case study and four synthetic sets.

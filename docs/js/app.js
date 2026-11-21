@@ -204,11 +204,59 @@
 
   function computeQuality() {
     state.quality = null;
+    state.qualityAll = [];
     var set = setById(state.qualityId);
     if (!state.network || !set) return;
     var clusters = state.qualityStage === "raw" ? set.raw : set.filtered;
     state.quality = C.clusterQuality(state.network, clusters);
     state.quality.clusters = clusters;
+    // the same measures, summarized for every loaded set, so the sets can be told apart on the network
+    state.qualityAll = state.sets.map(function (other) {
+      var q = other === set ? state.quality : C.clusterQuality(state.network, state.qualityStage === "raw" ? other.raw : other.filtered);
+      var cond = q.rows.map(function (r) { return r.conductance; }).filter(function (v) { return v !== null; }).sort(function (a, b) { return a - b; });
+      var inNetwork = 0, objects = 0;
+      q.rows.forEach(function (r) { inNetwork += r.inNetwork; objects += r.objects; });
+      return { id: other.id, name: other.name, clusters: q.rows.length, inNetwork: inNetwork, objects: objects,
+        modularity: q.modularity, coverage: q.coverage, medianConductance: cond.length ? cond[Math.floor((cond.length - 1) / 2)] : null };
+    });
+  }
+
+  // Table with one row per cluster set: how it scores on the loaded network. onPick(id) makes rows clickable.
+  function renderSetQualityTable(table, rows, pickedId, onPick) {
+    var columns = [
+      { key: "name", label: "Cluster set" }, { key: "clusters", label: "Clusters", num: true },
+      { key: "inNetwork", label: "Objects in network", num: true },
+      { key: "modularity", label: "Modularity", num: true, dec: true, best: "max" },
+      { key: "coverage", label: "Coverage", num: true, dec: true, best: "max" },
+      { key: "medianConductance", label: "Median conductance", num: true, dec: true, best: "min" }
+    ];
+    empty(table);
+    var thead = el("thead"), hr = el("tr"), tbody = el("tbody");
+    columns.forEach(function (c) { hr.appendChild(el("th", c.num ? { class: "num" } : null, c.label)); });
+    thead.appendChild(hr);
+    var best = {};
+    columns.forEach(function (c) {
+      if (!c.best || rows.length < 2) return;
+      var values = rows.map(function (r) { return r[c.key]; }).filter(function (v) { return v !== null; });
+      if (values.length) best[c.key] = c.best === "max" ? Math.max.apply(null, values) : Math.min.apply(null, values);
+    });
+    rows.forEach(function (r) {
+      var tr = el("tr", { class: (onPick ? "pickable" : "") + (r.id === pickedId ? " picked" : "") });
+      columns.forEach(function (c) {
+        var text = c.key === "inNetwork" ? r.inNetwork.toLocaleString() + " of " + r.objects.toLocaleString() : c.dec ? G.fmt(r[c.key]) : r[c.key];
+        tr.appendChild(el("td", { class: (c.num ? "num" : "") + (best[c.key] !== undefined && r[c.key] === best[c.key] ? " best" : "") }, text));
+      });
+      if (onPick) {
+        tr.tabIndex = 0;
+        tr.setAttribute("role", "button");
+        tr.setAttribute("aria-label", "Show " + r.name + " in detail");
+        tr.addEventListener("click", function () { onPick(r.id); });
+        tr.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(r.id); } });
+      }
+      tbody.appendChild(tr);
+    });
+    table.appendChild(thead);
+    table.appendChild(tbody);
   }
 
   // Notice content for a comparison that did not run: the reason, plus a button when it only waits for a go-ahead.
@@ -568,6 +616,20 @@
     table.appendChild(tbody);
     $("asymmetricNote").textContent = anyAsym ? "* Asymmetric metric: the first set of each pair is the reference. Point at a value to see the reverse direction." : "";
 
+    // bridge to Network quality: the compared sets on the loaded network, or how to get there
+    var onNetwork = (state.qualityAll || []).filter(function (q) { return r.ids.indexOf(q.id) >= 0; });
+    $("compareNetworkWrap").hidden = onNetwork.length === 0;
+    if (onNetwork.length > 0) {
+      $("compareNetworkHint").textContent = "Similarity says whether results agree; this says how well each one fits \"" + state.networkName +
+        "\". Higher modularity and coverage and lower conductance are better. Calculated on the sets " +
+        (state.qualityStage === "raw" ? "as loaded" : "after filters") + ", as chosen in Network quality.";
+      $("compareNetworkGo").textContent = "Details in Network quality \u2192";
+      renderSetQualityTable($("compareNetworkTable"), onNetwork, null, null);
+    } else {
+      $("compareNetworkHint").textContent = "Do you have the network these clusters came from? Load it to see how well each compared set fits it: conductance, modularity and coverage.";
+      $("compareNetworkGo").textContent = "Load a network \u2192";
+    }
+
     // maximum cluster match
     var options = r.ids.map(function (id, k) { return [id, r.names[k]]; });
     fillSelect($("matchA"), options, state.matchA);
@@ -724,6 +786,13 @@
       tile.appendChild(el("div", { class: "v" }, t[1]));
       box.appendChild(tile);
     });
+    $("qualityAllCard").hidden = state.qualityAll.length < 2;
+    renderSetQualityTable($("qualityAllTable"), state.qualityAll, state.qualityId, function (id) {
+      state.qualityId = id;
+      computeQuality();
+      render();
+    });
+    $("qualityDetailTitle").textContent = "In detail: " + set.name;
     var legendItems = G.graph($("chartGraph"), state.network, q, q.clusters), legend = $("graphLegend");
     empty(legend);
     legendItems.forEach(function (it) {
@@ -1037,6 +1106,9 @@
     });
 
     $("homeStart").addEventListener("click", function () { showTab("files"); });
+    $("homeNetwork").addEventListener("click", function () { showTab("quality"); });
+    $("homeNetworkExample").addEventListener("click", function () { $("exampleNetwork").click(); showTab("quality"); });
+    $("compareNetworkGo").addEventListener("click", function () { showTab("quality"); });
     $("homeHelp").addEventListener("click", function () { showTab("help"); });
     $("homeExample").addEventListener("click", function () { loadExample(EXAMPLES[0].files, EXAMPLES[0]); showTab("files"); });
 

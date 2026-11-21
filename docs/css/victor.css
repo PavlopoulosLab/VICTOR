@@ -372,3 +372,16 @@ th .info, td .info { margin-left: 6px; }
 .info-tip { pointer-events: none; max-width: min(320px, calc(100vw - 16px)); font-size: 13px; line-height: 1.4; }
 .info-tip b { display: block; margin-bottom: 2px; }
 @media (pointer: coarse) { .info { width: 22px; height: 22px; font-size: 13px; } }
+
+/* two entry points on the home page, and the per-set network summary */
+.home-grid.two { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+.home-card.feature { padding: 20px; display: flex; flex-direction: column; gap: 8px; border-width: 1.5px; }
+.home-card.feature h3 { font-size: 17px; }
+.home-card.feature .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; padding-top: 8px; }
+.hero h2 { max-width: 760px; margin-left: auto; margin-right: auto; }
+.section-title { font-size: 15px; margin-top: 4px; }
+tr.pickable { cursor: pointer; }
+tr.pickable:hover td { background: var(--surface-2); }
+tr.picked td { background: var(--surface-2); }
+tr.picked td:first-child { box-shadow: inset 3px 0 0 var(--accent); font-weight: 650; }
+td.best { font-weight: 700; }
