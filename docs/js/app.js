@@ -10,6 +10,37 @@
   var CROWDED_ABOVE_SETS = 15;   // Sankey, circos and network plots get hard to read beyond this many sets
   var ORIGINAL_TEN = ["adjrand", "fmi", "jaccard", "overlap", "wallace1", "wallace2", "mmm", "nmi1", "nmi2", "nvi"];
 
+  // Bundled examples. `metrics` are ticked in addition to the current selection when the example is loaded.
+  var EXAMPLES = [
+    { label: "Seven cluster sets (A to G)",
+      description: "Seven clusterings of the same 50 objects, from the publication. Ready to compare.",
+      files: ["A", "B", "C", "D", "E", "F", "G"].map(function (x) { return "Clustering_" + x + ".txt"; }) },
+    { label: "Three sets that need filtering",
+      description: "Three clusterings that do not contain the same objects. Use the Intersection or Superset filter; the UpSet plot shows what they share.",
+      files: ["Clustering_data1.txt", "Clustering_data2.txt", "Clustering_data3.txt"] },
+    { label: "Four algorithms on yeast proteins",
+      description: "Label Propagation, Louvain, MCL and Walktrap on a yeast protein interaction network of 1,430 proteins (first case study of the publication).",
+      files: ["Labelprop.txt", "Louvain.txt", "MCL.txt", "Walktrap.txt"] },
+    { label: "Gene expression in myocardial infarction",
+      description: "Hierarchical clusters of differentially expressed genes in four GEO datasets (third case study of the publication). The datasets share only part of their genes, so a filter is needed.",
+      files: ["MI_GSE48060.txt", "MI_GSE60993.txt", "MI_GSE61144.txt", "MI_GSE66360.txt"] },
+    { label: "Noise ladder (synthetic)",
+      description: "A reference clustering of 200 objects and four copies in which 5%, 10%, 20% and 40% of the objects were moved to another cluster. Every metric should fall step by step.",
+      files: ["Noise_00_reference.txt", "Noise_05_percent.txt", "Noise_10_percent.txt", "Noise_20_percent.txt", "Noise_40_percent.txt"] },
+    { label: "Finer and finer clusters (synthetic)",
+      description: "240 objects in 4, 8, 16 and 32 clusters, each level splitting the clusters of the one before. Homogeneity and Completeness show which set refines which.",
+      files: ["Levels_04_clusters.txt", "Levels_08_clusters.txt", "Levels_16_clusters.txt", "Levels_32_clusters.txt"],
+      metrics: ["homogeneity", "completeness"] },
+    { label: "Unrelated random clusterings (synthetic)",
+      description: "Four random clusterings of 300 objects with 5, 20 and 100 clusters. They share nothing, yet the Normalized Mutual Information rises with the number of clusters while the adjusted metrics stay near 0.",
+      files: ["Random_005_clusters.txt", "Random_020_clusters.txt", "Random_100_clusters_a.txt", "Random_100_clusters_b.txt"],
+      metrics: ["nmi2", "ami", "adjrand"] },
+    { label: "Overlapping clusters (synthetic)",
+      description: "Three clusterings of 60 objects in which some objects belong to two clusters. Only the Omega Index and the Overlapping NMI can compare them.",
+      files: ["Overlap_reference.txt", "Overlap_similar.txt", "Overlap_different.txt"],
+      metrics: ["omega", "onmi"] }
+  ];
+
   var state = {
     sets: [],            // { id, name, raw: clusters, filtered: clusters, selected, overlapping: n, warnings: [] }
     nextId: 1,
@@ -656,6 +687,10 @@
     state.filterMode = opts.filterMode || "none";
     state.viz.threshold = null;
     files.forEach(function (f) { addClusterSet(f, VICTOR.examples[f]); });
+    if (opts.metrics) { // make sure the metrics the example is about are ticked
+      opts.metrics.forEach(function (code) { if (state.metrics.indexOf(code) < 0) state.metrics.push(code); });
+      renderMetricList();
+    }
     if (opts.network) {
       state.network = C.parseEdgeList(VICTOR.examples[opts.network]);
       state.networkName = opts.network;
@@ -765,13 +800,15 @@
     wireDropzone($("dropzone"), loadClusterFiles);
     wireDropzone($("networkDropzone"), loadNetworkFile);
 
-    var artificial = ["A", "B", "C", "D", "E", "F", "G"].map(function (x) { return "Clustering_" + x + ".txt"; });
-    var filtering = ["Clustering_data1.txt", "Clustering_data2.txt", "Clustering_data3.txt"];
-    $("exampleArtificial").addEventListener("click", function () { loadExample(artificial); });
-    $("emptyExample").addEventListener("click", function () { loadExample(artificial); });
-    $("exampleFilter").addEventListener("click", function () { loadExample(filtering); });
-    $("exampleYeast").addEventListener("click", function () { loadExample(["Labelprop.txt", "Louvain.txt", "MCL.txt", "Walktrap.txt"]); });
-    $("exampleNetwork").addEventListener("click", function () { loadExample(filtering, { network: "Network_file.txt" }); });
+    fillSelect($("exampleSelect"), EXAMPLES.map(function (e, k) { return [k, e.label]; }), 0);
+    function describeExample() { $("exampleDescription").textContent = EXAMPLES[+$("exampleSelect").value].description; }
+    $("exampleSelect").addEventListener("change", describeExample);
+    describeExample();
+    $("exampleLoad").addEventListener("click", function () { var e = EXAMPLES[+$("exampleSelect").value]; loadExample(e.files, e); });
+    $("emptyExample").addEventListener("click", function () { loadExample(EXAMPLES[0].files, EXAMPLES[0]); });
+    $("exampleNetwork").addEventListener("click", function () {
+      loadExample(["Clustering_data1.txt", "Clustering_data2.txt", "Clustering_data3.txt"], { network: "Network_file.txt" });
+    });
 
     $("sizeMin").addEventListener("change", function () { state.sizeMin = Math.max(1, Math.floor(+this.value || 1)); refresh(); });
     $("sizeMax").addEventListener("change", function () { state.sizeMax = Math.max(1, Math.floor(+this.value || 1)); state.sizeMaxTouched = true; refresh(); });

@@ -41,7 +41,12 @@ N1	N10	0.8
 N2	N11	0.3
 ```
 
-Example files are in [`docs/examples`](docs/examples) and can also be loaded with one click inside the application.
+Example files are in [`docs/examples`](docs/examples) and can be loaded from the Examples list inside the application:
+
+* Seven cluster sets of 50 objects, and three sets that need filtering (from the publication)
+* Four algorithms on a yeast protein interaction network (first case study of the publication)
+* Gene expression clusters in four myocardial infarction datasets (third case study of the publication)
+* Synthetic sets that each show one behaviour: a noise ladder, finer and finer clusters, unrelated random clusterings, and overlapping clusters
 
 ## Running it
 
