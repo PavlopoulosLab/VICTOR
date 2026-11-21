@@ -63,6 +63,27 @@ Then open http://localhost:8000.
 
 To publish it, enable GitHub Pages for the repository (Settings → Pages → deploy from the `/docs` folder of the `main` branch).
 
+## API
+
+Other programs can hand their cluster sets and networks to VICTOR and read the results back. The API tab inside the application documents it and has a panel to try it.
+
+* **Link**: `index.html#json=<base64url JSON>` opens VICTOR with the data in the link.
+* **postMessage**: a page that opens or embeds VICTOR sends `{"type": "victor:load", "payload": …}` to show data, or `victor:compute` to get every metric value (and the network quality numbers) back as JSON.
+* **JavaScript**: `VICTOR.api.load(payload)`, `.results()`, `.quality()`, `.link(payload)`.
+
+```json
+{
+  "clusterSets": [
+    {"name": "Louvain", "clusters": {"c1": ["a", "b"], "c2": ["c", "d"]}},
+    {"name": "MCL", "clusters": {"k1": ["a"], "k2": ["b", "c", "d"]}}
+  ],
+  "networks": [{"name": "PPI", "edges": [{"source": "a", "target": "b"}, {"source": "c", "target": "d"}]}],
+  "metrics": ["adjrand", "ami"]
+}
+```
+
+VICTOR has no server, so there is no REST endpoint: all three routes pass the data to the page in the browser.
+
 ## Size limits
 
 The 20 basic metrics and the Adjusted Mutual Information grow with the number of objects, not the number of clusters: one pair of sets with 500,000 objects takes about a quarter of a second. Three metrics are costlier (Optimal-Match Accuracy, Omega Index, Overlapping NMI); when the loaded sets are too large for one of them, it is left out with a notice and the others are still calculated. Comparisons expected to take more than a few seconds ask for confirmation first. Files above 50 MB are refused.
@@ -81,7 +102,7 @@ The 20 basic metrics and the Adjusted Mutual Information grow with the number of
   * `main.js` (entry point, tabs, render), `events.js` (event wiring), `state.js`, `config.js` (constants, metric explanations, examples), `dom.js` (helpers)
   * `data.js` (loading, filters, comparison, networks)
   * `view-files.js`, `view-compare.js`, `view-plots.js`, `view-quality.js` (one per screen)
-  * `info.js` (metric explanations), `export-dialog.js` (image export), `norma.js` (NORMA export)
+  * `info.js` (metric explanations), `export-dialog.js` (image export), `norma.js` (NORMA export), `api.js` (links, postMessage and `VICTOR.api`)
 * [`docs/test/test.html`](docs/test/test.html): self-checks of the calculations. Open it in a browser to run them.
 
 ### Previous R/Shiny version

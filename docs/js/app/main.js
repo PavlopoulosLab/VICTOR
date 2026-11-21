@@ -9,6 +9,7 @@ import { renderCompare, renderMetricList } from "./view-compare.js";
 import { renderVisualize } from "./view-plots.js";
 import { renderQuality } from "./view-quality.js";
 import { normaData, normaPayload } from "./norma.js";
+import { initApi, initApiPanel } from "./api.js";
 import { initEvents } from "./events.js";
 
 export var currentTab = "home";
@@ -43,6 +44,8 @@ function start() {
   initEvents();
   renderMetricList();
   refresh();
+  initApiPanel();
+  initApi(); // last: a link or another page may load data straight away
 }
 
 VICTOR.state = state; // exposed for debugging and tests

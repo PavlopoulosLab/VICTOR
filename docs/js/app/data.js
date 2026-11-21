@@ -15,10 +15,14 @@ export function uniqueName(name, exceptId) {
 
 export function addClusterSet(fileName, text) {
   var parsed = C.parseClusterFile(text);
-  var name = uniqueName(fileName.replace(/\.(txt|tsv|tab|csv)$/i, ""));
+  return addParsedClusterSet(fileName.replace(/\.(txt|tsv|tab|csv)$/i, ""), parsed.clusters, parsed.warnings);
+}
+
+// Adds a cluster set that is already a list of { name, members }
+export function addParsedClusterSet(name, clusters, warnings) {
   var set = {
-    id: state.nextId++, name: name, raw: parsed.clusters, filtered: parsed.clusters, selected: true,
-    overlapping: C.overlappingObjects(parsed.clusters).length, warnings: parsed.warnings
+    id: state.nextId++, name: uniqueName(name), raw: clusters, filtered: clusters, selected: true,
+    overlapping: C.overlappingObjects(clusters).length, warnings: warnings || []
   };
   state.sets.push(set);
   return set;

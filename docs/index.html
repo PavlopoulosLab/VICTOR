@@ -82,6 +82,7 @@
   <button role="tab" data-tab="compare" aria-selected="false"><span class="step">2</span>Compare</button>
   <button role="tab" data-tab="visualize" aria-selected="false"><span class="step">3</span>Plots</button>
   <button role="tab" data-tab="quality" aria-selected="false">Network quality</button>
+  <button role="tab" data-tab="api" aria-selected="false">API</button>
   <button role="tab" data-tab="help" aria-selected="false">Help</button>
 </nav>
 
@@ -459,6 +460,97 @@ cluster3	F06,F11</pre></div>
   </section>
 
   <!-- ============================================================ HELP -->
+  <!-- ============================================================ API -->
+  <section class="tab" id="tab-api" role="tabpanel">
+    <div class="help">
+      <div>
+        <h2>VICTOR API</h2>
+        <p>Other programs can open VICTOR with their own cluster sets and networks, and read the results back, so that a clustering pipeline, a notebook or another web page can hand its results to VICTOR with one call. There are three ways in, all taking the same payload:</p>
+        <dl>
+          <dt>Link</dt><dd>A link to VICTOR that carries the data after <code>#json=</code>. Needs nothing else; suits small data.</dd>
+          <dt>postMessage</dt><dd>A web page opens VICTOR in a window or an iframe and sends it the payload. It can also ask for the results as JSON.</dd>
+          <dt>JavaScript</dt><dd><code>window.VICTOR.api</code>, for scripts running on this page or in the browser console.</dd>
+        </dl>
+        <p class="mt8">VICTOR has no server: the data stays in the browser in all three cases, and there is no REST address to call.</p>
+      </div>
+
+      <div>
+        <h2>The payload</h2>
+        <p>A JSON object:</p>
+        <dl>
+          <dt><code>clusterSets</code></dt><dd>List of cluster sets, each <code>{"name", "clusters"}</code>. <code>clusters</code> is an object <code>{"cluster": ["member", &hellip;]}</code> or a list of <code>{"name", "members"}</code>. Instead of <code>clusters</code>, <code>text</code> may hold the content of a VICTOR cluster set file.</dd>
+          <dt><code>networks</code></dt><dd>Optional list of networks, each <code>{"name", "edges"}</code> with edges as <code>{"source", "target", "weight"}</code> (weight optional), or <code>text</code> with an edge list.</dd>
+          <dt><code>metrics</code></dt><dd>Optional list of metric codes, for example <code>["adjrand", "ami"]</code>. The codes are the ones in the CSV export; an unknown code is reported with the full list.</dd>
+          <dt><code>filter</code></dt><dd><code>"none"</code> (default), <code>"intersection"</code> (shared objects only) or <code>"superset"</code> (all objects, adding singletons). <code>sizeMin</code> and <code>sizeMax</code> set the cluster size range.</dd>
+          <dt><code>reference</code></dt><dd>Name of a cluster set: compare every other set against it instead of every pair.</dd>
+          <dt><code>tab</code>, <code>plot</code>, <code>metric</code>, <code>theme</code></dt><dd>What to show: tab <code>"files"</code>, <code>"compare"</code>, <code>"plots"</code> or <code>"quality"</code>; plot <code>"heatmap"</code>, <code>"ranking"</code>, <code>"map"</code>, <code>"bar"</code>, <code>"sankey"</code>, <code>"network"</code> or <code>"circos"</code>; the metric plotted; <code>"light"</code> or <code>"dark"</code>.</dd>
+        </dl>
+        <p class="mt8">Loading a payload replaces whatever is loaded. A payload with a mistake is refused as a whole, with a message saying what is wrong.</p>
+      </div>
+
+      <div>
+        <h2>Try it</h2>
+        <p>Edit the payload and choose what to do with it.</p>
+        <textarea id="apiPayload" class="code-area mt8" rows="16" spellcheck="false" aria-label="Payload as JSON"></textarea>
+        <div class="toolbar mt8">
+          <button class="btn primary" id="apiLoad" type="button">Open in VICTOR</button>
+          <button class="btn" id="apiCompute" type="button">Compute and show results</button>
+          <button class="btn" id="apiLink" type="button">Make a link</button>
+          <button class="btn small" id="apiReset" type="button">Reset example</button>
+        </div>
+        <pre id="apiOutput" class="mt8" role="status"></pre>
+      </div>
+
+      <div>
+        <h2>Link</h2>
+        <p>The payload as base64url-encoded JSON after <code>#json=</code>. The part after <code>#</code> is never sent to any server. "Make a link" above builds one for this copy of VICTOR.</p>
+<pre>https://your-victor-address/index.html#json=eyJjbHVzdGVyU2V0cyI6W3sibmFtZSI6Ik1ldGhvZCBBIiwi&hellip;</pre>
+<pre># Python
+import base64, json, webbrowser
+payload = {"clusterSets": [{"name": "Louvain", "clusters": {"c1": ["a", "b"], "c2": ["c"]}},
+                           {"name": "MCL", "clusters": {"k1": ["a"], "k2": ["b", "c"]}}]}
+code = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+webbrowser.open("https://your-victor-address/index.html#json=" + code)</pre>
+      </div>
+
+      <div>
+        <h2>postMessage</h2>
+        <p>VICTOR sends <code>{"type": "victor:ready"}</code> to the page that opened or embeds it once it has started, and answers <code>{"type": "victor:ping"}</code> the same way. Then send one of:</p>
+        <dl>
+          <dt><code>victor:load</code></dt><dd><code>{"type": "victor:load", "payload": &hellip;, "requestId": 1}</code> shows the data. Answer: <code>{"type": "victor:loaded", "ok": true, "summary": &hellip;}</code>, or <code>"ok": false</code> with <code>"error"</code>.</dd>
+          <dt><code>victor:compute</code></dt><dd>Same message with type <code>victor:compute</code>. Answer: <code>{"type": "victor:results", "ok": true, "summary", "comparison", "quality"}</code> with every metric value for every pair and, when networks were sent, the quality of every set on every network.</dd>
+        </dl>
+<pre>const victor = window.open("https://your-victor-address/index.html", "_blank");
+window.addEventListener("message", (e) => {
+  if (e.source !== victor) return;
+  if (e.data.type === "victor:ready")
+    victor.postMessage({ type: "victor:compute", requestId: 1, payload }, "*");
+  if (e.data.type === "victor:results")
+    console.log(e.data.ok ? e.data.comparison.pairs : e.data.error);
+});</pre>
+      </div>
+
+      <div>
+        <h2>JavaScript</h2>
+<pre>VICTOR.api.load(payload)   // same as victor:load; returns the summary, throws on a bad payload
+VICTOR.api.results()       // the comparison on screen: clusterSets, metrics, pairs, matrix
+VICTOR.api.quality()       // every loaded cluster set on every loaded network
+VICTOR.api.link(payload)   // a #json= link to this copy of VICTOR
+VICTOR.api.version         // "1.0"</pre>
+      </div>
+
+      <div>
+        <h2>Limits and privacy</h2>
+        <ul>
+          <li>Nothing is uploaded: links, messages and scripts all hand the data to the page in your browser.</li>
+          <li>Messages are accepted only from the page that opened VICTOR or embeds it. Results are returned only for data sent in the same request, so another page cannot read what you loaded here yourself.</li>
+          <li>Payloads cannot run code: names are always shown as text.</li>
+          <li>Links carry the whole payload, so keep them for small data; a few thousand characters is safe everywhere.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <section class="tab" id="tab-help" role="tabpanel">
     <div class="help">
       <div>
