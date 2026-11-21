@@ -75,10 +75,16 @@ export var EXAMPLES = [
     metrics: ["omega", "onmi"] }
 ];
 
-export var VIZ_TITLES = { bar: "Bar plot", heatmap: "Hierarchical heatmap", sankey: "Sankey plot", network: "Network of cluster sets", circos: "Circos plot" };
+export var VIZ_TITLES = { heatmap: "Hierarchical heatmap", ranking: "Average similarity of each set", map: "Similarity map", bar: "Bar plot of pairs",
+  sankey: "Sankey plot", network: "Network of cluster sets", circos: "Circos plot" };
+export var MAX_PAIR_BARS = 30; // a bar per pair stops being readable beyond this; the heatmap shows all pairs
+// plots that show the selected pairs (and so follow "Hide below"); the others always use every pair
+export var PAIR_PLOTS = { bar: true, sankey: true, network: true, circos: true, heatmap: true };
 
 export var VIZ_NOTES = {
   bar: "One bar per pair of cluster sets, sorted from most to least similar.",
+  ranking: "One bar per cluster set: its average similarity to all the others, with a line from its lowest to its highest value. Sets at the top agree most with the rest.",
+  map: "Every cluster set is a point; the closer two points, the more similar the sets.",
   heatmap: "Rows and columns are ordered by hierarchical clustering, so similar sets sit together.",
   sankey: "Band thickness is relative to the other pairs shown.",
   network: "Thicker edges join more similar sets. Drag a node to move it.",

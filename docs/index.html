@@ -101,7 +101,7 @@
       <div class="home-grid two">
         <div class="card home-card feature">
           <h3>Compare clusterings with each other</h3>
-          <p>Load two or more clustering results and score how similar every pair is, with 27 metrics and five kinds of plots. Answers "do these methods agree?"</p>
+          <p>Load two or more clustering results and score how similar every pair is, with 27 metrics and seven kinds of plots. Answers "do these methods agree?"</p>
           <div class="actions">
             <button class="btn primary" id="homeStart" type="button">Load your cluster sets</button>
             <button class="btn" id="homeExample" type="button">Try an example</button>
@@ -122,7 +122,7 @@
       <div class="home-grid three">
         <div class="card home-card"><span class="step">1</span><h3>Load &amp; prepare</h3><p>Load one file per clustering result. If the files do not contain the same objects, VICTOR tells you and offers the fix with one click.</p></div>
         <div class="card home-card"><span class="step">2</span><h3>Compare</h3><p>Choose from 27 similarity metrics, each with a short explanation, and read the scores for every pair of results.</p></div>
-        <div class="card home-card"><span class="step">3</span><h3>Plots</h3><p>See the same scores as a bar plot, heatmap, Sankey plot, network or circos plot, and save any of them as an image.</p></div>
+        <div class="card home-card"><span class="step">3</span><h3>Plots</h3><p>See the same scores as a heatmap, a ranking of the sets, a similarity map, or pair bars, Sankey, network and circos plots, and save any of them as an image.</p></div>
       </div>
 
       <h3 class="home-heading">What you can do</h3>
@@ -339,14 +339,16 @@ cluster3	F06,F11</pre></div>
       <div id="vizBody" hidden class="content">
         <div class="toolbar">
           <div class="segmented" id="vizKind" role="group" aria-label="Plot type">
-            <button data-kind="bar" aria-pressed="true">Bar plot</button>
-            <button data-kind="heatmap" aria-pressed="false">Heatmap</button>
+            <button data-kind="heatmap" aria-pressed="true">Heatmap</button>
+            <button data-kind="ranking" aria-pressed="false">Ranking</button>
+            <button data-kind="map" aria-pressed="false">Map</button>
+            <button data-kind="bar" aria-pressed="false">Pair bars</button>
             <button data-kind="sankey" aria-pressed="false">Sankey</button>
             <button data-kind="network" aria-pressed="false">Network</button>
             <button data-kind="circos" aria-pressed="false">Circos</button>
           </div>
           <span class="field"><label class="field" for="vizMetric"><span>Metric</span></label> <select id="vizMetric"></select> <span id="vizMetricInfo"></span></span>
-          <label class="field"><span>Hide below</span>
+          <label class="field" id="vizThresholdField"><span>Hide below</span>
             <input type="range" id="vizThreshold" min="0" max="1" step="0.01" value="0">
             <output id="vizThresholdValue" for="vizThreshold">0.00</output>
           </label>
@@ -525,8 +527,10 @@ N2	N11	0.3</pre>
       <div>
         <h2>Plots</h2>
         <ul>
-          <li><b>Bar plot</b>: one bar per pair of cluster sets, sorted by similarity.</li>
-          <li><b>Heatmap</b>: all pairs in a grid, with rows and columns ordered by average-linkage hierarchical clustering so that similar sets sit together. The diagonal is left neutral.</li>
+          <li><b>Heatmap</b> (the default): all pairs in a grid, with rows and columns ordered by average-linkage hierarchical clustering so that similar sets sit together. The diagonal is left neutral. It stays readable with many sets.</li>
+          <li><b>Ranking</b>: one bar per cluster set, its average similarity to all the others, with a line from its lowest to its highest value. Shows which result agrees most with the rest.</li>
+          <li><b>Map</b>: every cluster set as a point, placed by multidimensional scaling so that similar sets are close. The note under the title says how faithfully the distances are reproduced.</li>
+          <li><b>Pair bars</b>: one bar per pair of cluster sets, sorted by similarity. Limited to the 30 most similar pairs when there are more.</li>
           <li><b>Sankey</b>: cluster sets as blocks joined by bands. Band thickness is relative to the other pairs shown, not an absolute scale.</li>
           <li><b>Network</b>: cluster sets as nodes; thicker edges mean more similar sets. Drag nodes to rearrange.</li>
           <li><b>Circos</b>: cluster sets as arcs; ribbons join the pairs, shaded by similarity.</li>

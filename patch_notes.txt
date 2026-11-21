@@ -7,6 +7,7 @@ Patch notes
 -Export dialog for every plot: PNG, SVG, PDF, JPEG or WebP, up to 6x resolution, theme/white/transparent background.
 -UpSet plot in the Files tab showing which objects the selected cluster sets share, when they differ.
 -Metrics that are too costly for the loaded sets are skipped with a notice; large comparisons ask before running.
+-Plots: the heatmap is the default; new Ranking (average similarity of each set) and Map (2D multidimensional scaling) views; pair bars are limited to the 30 most similar pairs.
 -Several networks can be loaded; a grid scores every cluster set on every network, with tick boxes for what to include. Compare can show every pair or each set against a reference.
 -The interface code is split into ES modules under docs/js/app, with smaller functions.
 -Open in NORMA (normaviz.org): sends the network and the clusters of every loaded set as annotations, with nodes drawn as pie charts; the same data can be downloaded as NORMA files.

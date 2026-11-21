@@ -18,7 +18,7 @@ export var state = {
   inspectStage: "filtered",
   matchA: null,
   matchB: null,
-  viz: { kind: "bar", metric: null, threshold: null, layout: "force" },
+  viz: { kind: "heatmap", metric: null, threshold: null, layout: "force" },
   network: null,       // parsed edge list
   networkName: "",
   networks: [],        // every loaded network: { id, name, net }; state.network / networkName mirror the active one

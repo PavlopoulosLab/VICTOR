@@ -233,6 +233,14 @@
   var h = C.hclust([[0, 1, 9, 9], [1, 0, 9, 9], [9, 9, 0, 2], [9, 9, 2, 0]]);
   check("hclust: {0,1} and {2,3} merge first, root height 9", close(h.root.height, 9) && h.order.join() === "0,1,2,3", h.order.join() + " " + h.root.height);
 
+  // 7b. multidimensional scaling: four corners of a 3 x 4 rectangle must come back with their distances intact
+  var corners = [[0, 0], [3, 0], [3, 4], [0, 4]], cd = corners.map(function (a) { return corners.map(function (b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); }); });
+  var placed = C.mds(cd), okMds = true;
+  for (i = 0; i < 4; i++) for (j = 0; j < 4; j++) {
+    if (!close(Math.hypot(placed.points[i][0] - placed.points[j][0], placed.points[i][1] - placed.points[j][1]), cd[i][j], 1e-6)) okMds = false;
+  }
+  check("mds reproduces the distances of a planar configuration, fit = 1", okMds && close(placed.fit, 1, 1e-9), JSON.stringify(placed.points));
+
   // 8. network: two triangles joined by one edge
   var net = C.parseEdgeList("a\tb\nb\tc\na\tc\nd e\ne f\nd f\nc d\nc d\nx x\n");
   var q = C.clusterQuality(net, [{ name: "C1", members: ["a", "b", "c"] }, { name: "C2", members: ["d", "e", "f", "zz"] }]);

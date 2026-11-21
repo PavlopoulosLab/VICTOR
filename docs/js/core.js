@@ -696,6 +696,64 @@
     return { order: root.items.slice(), root: root };
   }
 
+  // ---------------------------------------------------------------- 2D map of a distance matrix
+  // Classical multidimensional scaling: places n items in the plane so that their distances approximate
+  // the given symmetric distance matrix. Returns { points: [[x, y]], fit }, where fit is the correlation
+  // between the given distances and the distances in the plane (1 = reproduced exactly).
+  function mds(dist) {
+    var n = dist.length, i, j, k;
+    if (n === 0) return { points: [], fit: null };
+    if (n === 1) return { points: [[0, 0]], fit: null };
+    // double centering of the squared distances
+    var sq = dist.map(function (row) { return row.map(function (d) { return d * d; }); });
+    var rowMean = sq.map(function (row) { var s = 0; row.forEach(function (v) { s += v; }); return s / n; });
+    var total = 0;
+    rowMean.forEach(function (v) { total += v; });
+    total /= n;
+    var B = sq.map(function (row, a) { return row.map(function (v, b) { return -0.5 * (v - rowMean[a] - rowMean[b] + total); }); });
+    function topEigen(M) { // power iteration; M is symmetric
+      var v = [], it, norm;
+      for (i = 0; i < n; i++) v.push(Math.sin(i * 12.9898 + 1.3) + 1.5); // fixed start, so the map is reproducible
+      var value = 0;
+      for (it = 0; it < 500; it++) {
+        var w = new Array(n).fill(0);
+        for (i = 0; i < n; i++) for (j = 0; j < n; j++) w[i] += M[i][j] * v[j];
+        norm = Math.sqrt(w.reduce(function (s, x) { return s + x * x; }, 0));
+        if (norm < 1e-12) return { value: 0, vector: new Array(n).fill(0) };
+        var next = w.map(function (x) { return x / norm; }), change = 0, dot = 0;
+        for (i = 0; i < n; i++) { dot += next[i] * v[i]; }
+        if (dot < 0) next = next.map(function (x) { return -x; });
+        for (i = 0; i < n; i++) change += Math.abs(next[i] - v[i]);
+        v = next;
+        value = 0;
+        for (i = 0; i < n; i++) for (j = 0; j < n; j++) value += v[i] * M[i][j] * v[j];
+        if (change < 1e-10) break;
+      }
+      return { value: value, vector: v };
+    }
+    var first = topEigen(B);
+    var deflated = B.map(function (row, a) { return row.map(function (x, b) { return x - first.value * first.vector[a] * first.vector[b]; }); });
+    var second = topEigen(deflated);
+    var sx = Math.sqrt(Math.max(first.value, 0)), sy = Math.sqrt(Math.max(second.value, 0));
+    var points = [];
+    for (k = 0; k < n; k++) points.push([first.vector[k] * sx, second.vector[k] * sy]);
+    // how well the plane reproduces the distances
+    var given = [], drawn = [];
+    for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) {
+      given.push(dist[i][j]);
+      drawn.push(Math.sqrt(Math.pow(points[i][0] - points[j][0], 2) + Math.pow(points[i][1] - points[j][1], 2)));
+    }
+    var fit = null;
+    if (given.length > 1) {
+      var mg = 0, md = 0, sgd = 0, sgg = 0, sdd = 0;
+      given.forEach(function (v, q) { mg += v; md += drawn[q]; });
+      mg /= given.length; md /= given.length;
+      given.forEach(function (v, q) { sgd += (v - mg) * (drawn[q] - md); sgg += (v - mg) * (v - mg); sdd += (drawn[q] - md) * (drawn[q] - md); });
+      fit = sgg > 0 && sdd > 0 ? sgd / Math.sqrt(sgg * sdd) : null;
+    }
+    return { points: points, fit: fit };
+  }
+
   // ---------------------------------------------------------------- network cluster quality
   // network: result of parseEdgeList. clusters: [{ name, members }].
   // Objects absent from the network are ignored (and counted). Network nodes outside every cluster
@@ -775,6 +833,7 @@
     estimateSeconds: estimateSeconds,
     compareAll: compareAll,
     hclust: hclust,
+    mds: mds,
     clusterQuality: clusterQuality
   };
 })(typeof window !== "undefined" ? window : globalThis);

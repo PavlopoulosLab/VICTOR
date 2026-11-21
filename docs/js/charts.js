@@ -314,15 +314,17 @@
     clear(el);
     opts = opts || {};
     var t = theme();
-    if (items.length === 0) return emptyState(el, "No pairs at or above the threshold.");
+    if (items.length === 0) return emptyState(el, opts.empty || "No pairs at or above the threshold.");
     items = items.slice().sort(function (a, b) { return b.value - a.value; });
+    var ranged = items[0].min !== undefined; // items carry a min-max range, drawn as a thin line over the bar
     // on phones the label sits on its own line above the bar
     var W = chartWidth(el), stacked = narrow(W), rowH = stacked ? 46 : 28, barY = stacked ? 21 : 5, barH = 18;
     var labelW = stacked ? 4 : Math.min(W * 0.45, d3.max(items, function (d) { return textWidth(clip(d.label, 48)); }) + 16);
     var labelChars = stacked ? Math.floor((W - 12) / 6.8) : 48;
     var m = { top: 8, right: 58, bottom: 40, left: labelW }, H = m.top + m.bottom + items.length * rowH;
     var svg = svgRoot(el, W, H, opts.label);
-    var lo = Math.min(0, d3.min(items, function (d) { return d.value; })), hi = Math.max(d3.max(items, function (d) { return d.value; }), 1e-9);
+    var lo = Math.min(0, d3.min(items, function (d) { return ranged ? d.min : d.value; }));
+    var hi = Math.max(d3.max(items, function (d) { return ranged ? d.max : d.value; }), 1e-9);
     var x = d3.scaleLinear().domain([lo, hi]).nice(5).range([m.left, W - m.right]);
     x.ticks(stacked ? 3 : 5).forEach(function (tick) {
       svg.append("line").attr("x1", x(tick)).attr("x2", x(tick)).attr("y1", m.top).attr("y2", H - m.bottom).attr("stroke", t.grid);
@@ -335,11 +337,67 @@
     rows.append("text").attr("x", stacked ? 4 : m.left - 8).attr("y", stacked ? 14 : rowH / 2 + 4).attr("text-anchor", stacked ? "start" : "end")
       .attr("fill", t.text).attr("paint-order", "stroke").attr("stroke", t.surface).attr("stroke-width", stacked ? 3 : 0)
       .text(function (d) { return clip(d.label, labelChars); });
-    rows.append("text").attr("x", function (d) { return Math.max(x(d.value), x(0)) + 6; }).attr("y", barY + barH / 2 + 4).attr("fill", t.muted)
+    if (ranged) {
+      rows.append("line").attr("x1", function (d) { return x(d.min); }).attr("x2", function (d) { return x(d.max); })
+        .attr("y1", barY + barH / 2).attr("y2", barY + barH / 2).attr("stroke", t.text).attr("stroke-width", 1.5);
+      ["min", "max"].forEach(function (end) {
+        rows.append("line").attr("x1", function (d) { return x(d[end]); }).attr("x2", function (d) { return x(d[end]); })
+          .attr("y1", barY + 3).attr("y2", barY + barH - 3).attr("stroke", t.text).attr("stroke-width", 1.5);
+      });
+    }
+    rows.append("text").attr("x", function (d) { return Math.max(x(ranged ? d.max : d.value), x(0)) + 6; }).attr("y", barY + barH / 2 + 4).attr("fill", t.muted)
       .text(function (d) { return fmt(d.value); });
-    hover(rows, function (d) { return [d.label, [[opts.metric || "Similarity", fmt(d.value)]]]; });
+    hover(rows, function (d) { return [d.label, d.rows || [[opts.metric || "Similarity", fmt(d.value)]]]; });
     svg.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", m.top).attr("y2", H - m.bottom).attr("stroke", t.neutral);
     if (opts.metric) svg.append("text").attr("x", (m.left + W - m.right) / 2).attr("y", H - 6).attr("text-anchor", "middle").attr("fill", t.muted).text(opts.metric);
+  }
+
+  // ---------------------------------------------------------------- similarity map (2D embedding)
+  // names: [n], points: [[x, y]] from core.mds; closer points are more similar cluster sets.
+  function map(el, names, points, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme(), n = names.length;
+    if (n < 3) return emptyState(el, "A map needs at least three cluster sets.");
+    var W = chartWidth(el), H = Math.max(360, Math.min(600, W * 0.6)), pad = narrow(W) ? 46 : 80;
+    var svg = svgRoot(el, W, H, opts.label);
+    var xs = points.map(function (p) { return p[0]; }), ys = points.map(function (p) { return p[1]; });
+    var span = Math.max(d3.max(xs) - d3.min(xs), d3.max(ys) - d3.min(ys), 1e-9);
+    var scale = Math.min((W - 2 * pad) / span, (H - 2 * pad) / span); // one scale for both axes: distances stay comparable
+    var cx = (d3.max(xs) + d3.min(xs)) / 2, cy = (d3.max(ys) + d3.min(ys)) / 2;
+    var px = function (p) { return W / 2 + (p[0] - cx) * scale; }, py = function (p) { return H / 2 + (p[1] - cy) * scale; };
+    svg.append("rect").attr("x", 1).attr("y", 1).attr("width", W - 2).attr("height", H - 2).attr("rx", 8).attr("fill", "none").attr("stroke", t.grid);
+    // the strongest link of every set, as orientation
+    if (opts.matrix) {
+      var drawn = {};
+      names.forEach(function (name, i) {
+        var best = -1, bestValue = -Infinity;
+        names.forEach(function (other, j) { if (j !== i && opts.matrix[i][j] > bestValue) { bestValue = opts.matrix[i][j]; best = j; } });
+        var key = Math.min(i, best) + "|" + Math.max(i, best);
+        if (best < 0 || drawn[key]) return;
+        drawn[key] = true;
+        svg.append("line").attr("x1", px(points[i])).attr("y1", py(points[i])).attr("x2", px(points[best])).attr("y2", py(points[best]))
+          .attr("stroke", t.neutral).attr("stroke-width", 1.5).attr("stroke-dasharray", "4 4");
+      });
+    }
+    var g = svg.append("g").selectAll("g").data(names).enter().append("g")
+      .attr("transform", function (d, i) { return "translate(" + px(points[i]) + "," + py(points[i]) + ")"; });
+    g.append("circle").attr("r", 16).attr("fill", "transparent");
+    g.append("circle").attr("r", 7).attr("fill", t.series[0]).attr("stroke", t.surface).attr("stroke-width", 2);
+    g.append("text").attr("y", -12).attr("text-anchor", "middle").attr("fill", t.text).attr("font-size", 12)
+      .attr("paint-order", "stroke").attr("stroke", t.surface).attr("stroke-width", 3)
+      .text(function (d) { return clip(d, narrow(W) ? 12 : 24); });
+    hover(g, function (d) {
+      var i = names.indexOf(d), rows = [];
+      if (opts.matrix) {
+        names.map(function (other, j) { return { other: other, v: j === i ? null : opts.matrix[i][j] }; })
+          .filter(function (o) { return o.v !== null; }).sort(function (a, b) { return b.v - a.v; }).slice(0, 4)
+          .forEach(function (o) { rows.push([o.other, fmt(o.v)]); });
+      }
+      return [d + (rows.length ? ": most similar to" : ""), rows];
+    });
+    svg.append("text").attr("x", 12).attr("y", H - 12).attr("fill", t.muted).attr("font-size", 11)
+      .text("Closer points are more similar. Dashed lines join each set to its most similar one.");
   }
 
   // ---------------------------------------------------------------- hierarchical heatmap
@@ -853,7 +911,7 @@
 
   VICTOR.charts = {
     theme: theme, sequential: sequential, readableOn: readableOn, fmt: fmt,
-    columns: columns, histogram: histogram, bars: bars, upset: upset, heatmap: heatmap, sankey: sankey,
+    columns: columns, histogram: histogram, bars: bars, upset: upset, map: map, heatmap: heatmap, sankey: sankey,
     network: network, chord: chord, graph: graph,
     exportImage: exportImage, exportSource: exportSource, EXPORT_FORMATS: EXPORT_FORMATS, TITLE_BAND: TITLE_BAND, download: download
   };
