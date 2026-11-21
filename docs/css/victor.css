@@ -308,3 +308,32 @@ img, svg, canvas { max-width: none; }
   .form-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   #exportInfo { padding-left: 0; }
 }
+
+/* numbered workflow steps in the tab bar */
+.tabs .step {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-right: 7px;
+  border-radius: 50%; background: var(--surface-2); color: var(--text-2); font-size: 12px; font-weight: 650;
+}
+.tabs button[aria-selected="true"] .step { background: var(--accent); color: var(--on-accent); }
+.tabs button.done .step { background: var(--good-bg); color: var(--good); }
+.tabs button.waiting { opacity: 0.6; }
+.steps { text-align: left; max-width: 520px; margin: 14px auto 0; padding-left: 22px; color: var(--text); }
+.steps li { margin: 6px 0; }
+.notice .choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.notice .btn { color: var(--text); }
+.notice .btn.primary { color: var(--on-accent); }
+.notice .btn.link { color: var(--accent-ink); }
+.summary { font-size: 15px; margin-bottom: 6px; }
+.summary b { font-weight: 650; }
+.panel h3 { font-size: 13px; color: var(--text-2); font-weight: 650; }
+#resultsTable th.metric-head { white-space: normal; min-width: 92px; max-width: 150px; vertical-align: bottom; }
+#setsTable th .btn.link { font-size: 12px; margin-left: 8px; font-weight: 500; }
+
+/* collapsible metric chooser: open on wide screens, folded on phones so the results come first */
+details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "\25B8"; color: var(--text-2); }
+details[open] > summary::before { content: "\25BE"; }
+details > summary h2 { margin: 0; display: inline; }
+details > summary .count { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--surface); color: var(--text-2); font-size: 11px; line-height: 18px; text-align: center; }
+.details-body { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }

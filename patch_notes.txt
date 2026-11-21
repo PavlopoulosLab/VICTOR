@@ -7,6 +7,7 @@ Patch notes
 -Export dialog for every plot: PNG, SVG, PDF, JPEG or WebP, up to 6x resolution, theme/white/transparent background.
 -UpSet plot in the Files tab showing which objects the selected cluster sets share, when they differ.
 -Metrics that are too costly for the loaded sets are skipped with a notice; large comparisons ask before running.
+-Interface redesign: numbered steps (Load & prepare, Compare, Plots), one-click fixes when sets contain different objects, metric presets with one-line explanations, a summary of the most and least similar pair, results table with metrics or pairs as rows.
 -Eight bundled examples with descriptions, including the myocardial infarction case study and four synthetic sets.
 -Light theme by default with a switch to dark; the banner is an SVG that follows the theme.
 -Cluster quality on a network: internal density, cut ratio, modularity and coverage next to conductance.

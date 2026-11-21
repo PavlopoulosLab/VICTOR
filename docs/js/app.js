@@ -9,6 +9,38 @@
   var CONFIRM_ABOVE_SECONDS = 4; // estimated calculation time above which the user is asked before the page is blocked
   var CROWDED_ABOVE_SETS = 15;   // Sankey, circos and network plots get hard to read beyond this many sets
   var ORIGINAL_TEN = ["adjrand", "fmi", "jaccard", "overlap", "wallace1", "wallace2", "mmm", "nmi1", "nmi2", "nvi"];
+  // corrected for chance (ARI, AMI) or easy to explain (Jaccard, B-Cubed F, best matching, NMI)
+  var RECOMMENDED = ["adjrand", "jaccard", "match_opt", "bcubed_f", "nmi2", "ami"];
+  // one-line, plain-language explanation of every metric
+  var METRIC_HINTS = {
+    adjrand: "Agreement on which pairs of objects are together, corrected for chance. About 0 for unrelated sets. A good default.",
+    rand: "Share of object pairs the two sets agree on. Rises towards 1 with many clusters, so prefer the adjusted version.",
+    fmi: "Geometric mean of the two Wallace criteria: how often a pair grouped in one set is grouped in the other.",
+    jaccard: "Pairs grouped together in both sets, out of pairs grouped together in at least one.",
+    overlap: "Pairs grouped together in both sets, out of the grouped pairs of the set that has fewer.",
+    wallace1: "Chance that a pair grouped together in the first set is also together in the second.",
+    wallace2: "Chance that a pair grouped together in the second set is also together in the first.",
+    mmm: "Clusters are paired off by largest overlap, greedily; the share of objects in matched clusters.",
+    match_opt: "Share of objects that fall in matching clusters under the best possible one-to-one pairing of clusters.",
+    f: "Each cluster of the first set takes its best F-score against the second set; averaged by cluster size.",
+    mhm: "Purity: each cluster of the first set counts its largest overlap with a cluster of the second.",
+    vdm_norm: "Van Dongen distance turned into a similarity: how much the best overlaps cover both sets.",
+    bcubed_p: "Per object: how much of its cluster in the second set also shares its cluster in the first.",
+    bcubed_r: "Per object: how much of its cluster in the first set also shares its cluster in the second.",
+    bcubed_f: "Balance of B-Cubed precision and recall, averaged over objects. Easy to interpret and symmetric.",
+    ecs: "Per object: objects sharing both of its clusters, divided by the larger of the two clusters.",
+    nmi1: "Shared information between the sets, scaled by the geometric mean of their entropies.",
+    nmi2: "Shared information between the sets, scaled by the average of their entropies. Also known as V-Measure.",
+    nmi_max: "Shared information scaled by the larger entropy: the strictest version of NMI.",
+    ami: "Shared information corrected for chance. About 0 for unrelated sets, however many clusters they have.",
+    nvi: "How much of each set is left unexplained by the other, turned into a similarity.",
+    vi_norm: "Variation of Information scaled by its maximum for this many objects, turned into a similarity.",
+    vi_joint: "Variation of Information scaled by the joint entropy, turned into a similarity. 0 for independent sets.",
+    homogeneity: "1 when every cluster of the second set lies inside a single cluster of the first.",
+    completeness: "1 when every cluster of the first set lies inside a single cluster of the second.",
+    omega: "Adjusted Rand Index extended to overlapping clusters: do pairs share the same number of clusters in both sets?",
+    onmi: "Mutual information for overlapping clusters: each cluster is explained by its best match in the other set."
+  };
 
   // Bundled examples. `metrics` are ticked in addition to the current selection when the example is loaded.
   var EXAMPLES = [
@@ -48,7 +80,8 @@
     sizeMax: 1,
     sizeMaxTouched: false,
     filterMode: "none",
-    metrics: ORIGINAL_TEN.slice(),
+    metrics: RECOMMENDED.slice(),
+    tableRows: null,     // "metrics" | "pairs"; null = chosen automatically from the shape of the results
     result: null,        // { names, codes, matrix } of the selected sets
     resultError: "",
     pending: null,       // { seconds } when a large comparison waits for the user's go-ahead
@@ -140,7 +173,7 @@
     state.result = null;
     state.resultError = "";
     var chosen = selectedSets();
-    if (chosen.length < 2) { state.resultError = "Select at least two cluster sets in the Files tab."; return; }
+    if (chosen.length < 2) { state.resultError = "Tick at least two cluster sets in step 1 (Load & prepare)."; return; }
     if (state.metrics.length === 0) { state.resultError = "Choose at least one metric."; return; }
     state.pending = null;
     var objects = 0;
@@ -230,16 +263,39 @@
     Array.prototype.forEach.call(document.querySelectorAll('input[name="filterMode"]'), function (r) { r.checked = r.value === state.filterMode; });
     if (state.sets.length === 0) return;
 
-    // readiness
+    // readiness: says what is wrong and offers the fix as a button
     var chosen = selectedSets(), readiness = $("readiness");
-    if (chosen.length < 2) {
-      setNotice(readiness, "", ["Select at least two cluster sets to compare them."]);
-    } else if (state.result) {
-      setNotice(readiness, state.result.note ? "warn" : "good", [bold("Ready for comparison. "), "The " + chosen.length + " selected sets contain the same " +
-        C.objectSet(chosen[0].filtered).size + " objects. ", state.result.note ? state.result.note + " " : "", linkTo("compare", "See the comparison")]);
-    } else {
-      setNotice(readiness, "warn", [bold(state.pending ? "Not calculated yet. " : "Not ready for comparison. ")].concat(notRunParts()));
+    function setMode(mode) { return function () { state.filterMode = mode; refresh(); }; }
+    function action(text, handler, cls) {
+      var b = el("button", { class: cls || "btn small", type: "button" }, text);
+      b.addEventListener("click", handler);
+      return b;
     }
+    var overlapNow = chosen.length >= 2 ? C.objectIntersections(chosen.map(function (s) { return s.filtered; })) : null;
+    var mismatch = !!overlapNow && !(overlapNow.combos.length === 1 && overlapNow.combos[0].degree === chosen.length);
+    if (chosen.length < 2) {
+      setNotice(readiness, "", [state.sets.length < 2 ? "Load at least one more cluster set to compare." : "Tick at least two cluster sets to compare them."]);
+    } else if (state.result) {
+      var filterNote = state.filterMode === "intersection" ? "Only the objects shared by all sets are kept. "
+        : state.filterMode === "superset" ? "Missing objects were added as singleton clusters. " : "";
+      var parts = [bold("Ready to compare. "), "The " + chosen.length + " selected sets contain the same " +
+        C.objectSet(chosen[0].filtered).size.toLocaleString() + " objects. ", filterNote, state.result.note ? state.result.note + " " : ""];
+      var row = el("div", { class: "choices" });
+      row.appendChild(linkTo("compare", "Compare them \u2192", "btn small primary"));
+      if (state.filterMode !== "none") row.appendChild(action("Undo this filter", setMode("none")));
+      parts.push(row);
+      setNotice(readiness, state.result.note ? "warn" : "good", parts);
+    } else if (mismatch && !state.pending) {
+      var inAllNow = overlapNow.combos.filter(function (c) { return c.degree === chosen.length; })[0], sharedCount = inAllNow ? inAllNow.count : 0;
+      var fix = el("div", { class: "choices" });
+      if (sharedCount > 0) fix.appendChild(action("Keep the " + sharedCount.toLocaleString() + " shared objects", setMode("intersection"), "btn small primary"));
+      fix.appendChild(action("Keep all " + overlapNow.total.toLocaleString() + " objects, adding singletons", setMode("superset"), sharedCount > 0 ? "btn small" : "btn small primary"));
+      setNotice(readiness, "warn", [bold("These sets do not contain the same objects. "),
+        sharedCount.toLocaleString() + " of " + overlapNow.total.toLocaleString() + " objects are in all " + chosen.length + " sets. Choose how to make them comparable:", fix]);
+    } else {
+      setNotice(readiness, "warn", [bold(state.pending ? "Not calculated yet. " : "Not ready to compare. ")].concat(notRunParts()));
+    }
+    $("dropSingletons").textContent = state.sizeMin >= 2 ? "Keep singleton clusters" : "Drop singleton clusters";
     var warnings = $("fileWarnings");
     empty(warnings);
     state.sets.forEach(function (s) {
@@ -337,8 +393,8 @@
     }
   }
 
-  function linkTo(tab, text) {
-    var b = el("button", { class: "btn link" }, text);
+  function linkTo(tab, text, cls) {
+    var b = el("button", { class: cls || "btn link", type: "button" }, text);
     b.addEventListener("click", function () { showTab(tab); });
     return b;
   }
@@ -361,6 +417,7 @@
   // ---------------------------------------------------------------- rendering: compare
   function renderMetricList() {
     var box = $("metricList"), groups = {};
+    $("metricCount").textContent = state.metrics.length + " selected";
     empty(box);
     C.METRICS.forEach(function (m) { (groups[m.group] = groups[m.group] || []).push(m); });
     Object.keys(groups).forEach(function (g) {
@@ -371,9 +428,11 @@
         cb.checked = state.metrics.indexOf(m.code) >= 0;
         cb.addEventListener("change", function () {
           if (cb.checked) state.metrics.push(m.code); else state.metrics = state.metrics.filter(function (c) { return c !== m.code; });
+          $("metricCount").textContent = state.metrics.length + " selected";
           compare();
           render();
         });
+        label.title = METRIC_HINTS[m.code] || "";
         label.appendChild(cb);
         label.appendChild(el("span", null, m.label + (m.symmetric ? "" : " *")));
         wrap.appendChild(label);
@@ -387,42 +446,76 @@
     var r = state.result, msg = $("compareMessage");
     $("compareBody").hidden = !r;
     if (!r) {
-      setNotice(msg, state.sets.length ? "warn" : "", (state.sets.length ? notRunParts() : ["Load cluster set files first. "]).concat([linkTo("files", "Go to Files")]));
+      setNotice(msg, state.sets.length ? "warn" : "", (state.sets.length ? notRunParts() : ["Load cluster set files first. "]).concat([linkTo("files", "Go to step 1")]));
       return;
     }
     var nPairs = r.names.length * (r.names.length - 1) / 2;
     var caveats = (r.note ? r.note + " " : "") + skippedText(r);
     setNotice(msg, caveats ? "warn" : "good", [bold(r.names.length + " cluster sets, " + nPairs + " pair" + (nPairs > 1 ? "s" : "") + ", " + r.codes.length + " metric" + (r.codes.length > 1 ? "s" : "") + ". "),
-      caveats, linkTo("visualize", "Plot these results")]);
+      caveats, linkTo("visualize", "Plot these results \u2192", "btn small primary")]);
 
     var table = $("resultsTable"), pairs = [], i, j;
     for (i = 0; i < r.names.length; i++) for (j = i + 1; j < r.names.length; j++) pairs.push([i, j]);
+    var pairName = function (p) { return r.names[p[0]] + " vs " + r.names[p[1]]; };
+
+    // headline: most and least similar pair by the metric shown in the plots
+    var headline = r.codes.indexOf(state.viz.metric) >= 0 ? state.viz.metric : r.codes[0], summary = $("compareSummary");
+    empty(summary);
+    if (pairs.length > 1) {
+      var ranked = pairs.slice().sort(function (a, b) { return r.matrix[headline][b[0]][b[1]] - r.matrix[headline][a[0]][a[1]]; });
+      var top = ranked[0], bottom = ranked[ranked.length - 1];
+      [document.createTextNode("By " + C.metricByCode(headline).label + ", the most similar pair is "), bold(pairName(top)),
+        document.createTextNode(" (" + G.fmt(r.matrix[headline][top[0]][top[1]]) + ") and the least similar is "), bold(pairName(bottom)),
+        document.createTextNode(" (" + G.fmt(r.matrix[headline][bottom[0]][bottom[1]]) + ").")].forEach(function (n) { summary.appendChild(n); });
+    } else {
+      summary.appendChild(document.createTextNode(pairName(pairs[0]) + ": " + r.codes.length + " metric" + (r.codes.length > 1 ? "s" : "") + " below."));
+    }
+
+    // one colour scale per metric, whichever way the table is turned
+    var cellsOf = {}, anyAsym = false;
+    r.codes.forEach(function (code) {
+      var def = C.metricByCode(code), values = pairs.map(function (p) { return r.matrix[code][p[0]][p[1]]; });
+      var color = G.sequential(Math.min.apply(null, values), Math.max.apply(null, values));
+      if (!def.symmetric) anyAsym = true;
+      cellsOf[code] = pairs.map(function (p, k) {
+        return function () {
+          var td = el("td", { class: "val" }, G.fmt(values[k]));
+          if (pairs.length > 1) { var bg = color(values[k]); td.style.background = bg; td.style.color = G.readableOn(bg); }
+          if (!def.symmetric) td.title = r.names[p[1]] + " vs " + r.names[p[0]] + ": " + G.fmt(r.matrix[code][p[1]][p[0]]);
+          return td;
+        };
+      });
+    });
+    var rowsAre = state.tableRows || (pairs.length > r.codes.length || global.innerWidth < 700 ? "pairs" : "metrics");
+    setPressed($("tableRows"), "rows", rowsAre);
     empty(table);
-    var thead = el("thead"), hr = el("tr");
-    hr.appendChild(el("th", null, "Metric"));
-    pairs.forEach(function (p) { hr.appendChild(el("th", { class: "num" }, r.names[p[0]] + " vs " + r.names[p[1]])); });
+    var thead = el("thead"), hr = el("tr"), tbody = el("tbody");
+    if (rowsAre === "metrics") {
+      hr.appendChild(el("th", null, "Metric"));
+      pairs.forEach(function (p) { hr.appendChild(el("th", { class: "num" }, pairName(p))); });
+      r.codes.forEach(function (code) {
+        var def = C.metricByCode(code), tr = el("tr"), head = el("td", { title: METRIC_HINTS[code] || "" }, def.label + (def.symmetric ? "" : " *"));
+        tr.appendChild(head);
+        cellsOf[code].forEach(function (make) { tr.appendChild(make()); });
+        tbody.appendChild(tr);
+      });
+    } else {
+      hr.appendChild(el("th", null, "Pair"));
+      r.codes.forEach(function (code) {
+        var def = C.metricByCode(code);
+        hr.appendChild(el("th", { class: "num metric-head", title: METRIC_HINTS[code] || "" }, def.label + (def.symmetric ? "" : " *")));
+      });
+      pairs.forEach(function (p, k) {
+        var tr = el("tr");
+        tr.appendChild(el("td", null, pairName(p)));
+        r.codes.forEach(function (code) { tr.appendChild(cellsOf[code][k]()); });
+        tbody.appendChild(tr);
+      });
+    }
     thead.appendChild(hr);
     table.appendChild(thead);
-    var tbody = el("tbody"), anyAsym = false;
-    r.codes.forEach(function (code) {
-      var def = C.metricByCode(code), tr = el("tr"), values = pairs.map(function (p) { return r.matrix[code][p[0]][p[1]]; });
-      var lo = Math.min.apply(null, values), hi = Math.max.apply(null, values), color = G.sequential(lo, hi);
-      if (!def.symmetric) anyAsym = true;
-      tr.appendChild(el("td", null, def.label + (def.symmetric ? "" : " *")));
-      pairs.forEach(function (p, k) {
-        var td = el("td", { class: "val" }, G.fmt(values[k]));
-        if (pairs.length > 1) {
-          var bg = color(values[k]);
-          td.style.background = bg;
-          td.style.color = G.readableOn(bg);
-        }
-        if (!def.symmetric) td.title = r.names[p[1]] + " vs " + r.names[p[0]] + ": " + G.fmt(r.matrix[code][p[1]][p[0]]);
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
     table.appendChild(tbody);
-    $("asymmetricNote").textContent = anyAsym ? "* Asymmetric metric: the first set of each pair is the reference. Hover a value to see the reverse direction." : "";
+    $("asymmetricNote").textContent = anyAsym ? "* Asymmetric metric: the first set of each pair is the reference. Point at a value to see the reverse direction." : "";
 
     // maximum cluster match
     var options = r.ids.map(function (id, k) { return [id, r.names[k]]; });
@@ -474,7 +567,7 @@
     $("vizBody").hidden = !r;
     msg.hidden = !!r;
     if (!r) {
-      setNotice(msg, state.sets.length ? "warn" : "", (state.sets.length ? notRunParts() : ["Load cluster set files first. "]).concat([linkTo("files", "Go to Files")]));
+      setNotice(msg, state.sets.length ? "warn" : "", (state.sets.length ? notRunParts() : ["Load cluster set files first. "]).concat([linkTo("files", "Go to step 1")]));
       return;
     }
     var v = state.viz, pairs = pairList(), values = pairs.map(function (p) { return p.value; });
@@ -548,7 +641,7 @@
     $("qualityBody").hidden = !q;
     if (!q) {
       var need = !state.network && !state.sets.length ? "Load a network file and at least one cluster set file, or use the example."
-        : !state.network ? "Load a network file to evaluate the clusters on it." : "Load a cluster set file in the Files tab.";
+        : !state.network ? "Load a network file to evaluate the clusters on it." : "Load a cluster set file in step 1 (Load & prepare).";
       setNotice(msg, "", [need]);
       return;
     }
@@ -635,6 +728,11 @@
   // Charts measure their container, so only the visible tab is drawn.
   function render() {
     $("countSets").textContent = state.sets.length;
+    Array.prototype.forEach.call($("tabs").querySelectorAll("button"), function (b) {
+      var tab = b.getAttribute("data-tab");
+      b.classList.toggle("done", tab === "files" && !!state.result);
+      b.classList.toggle("waiting", (tab === "compare" || tab === "visualize") && !state.result);
+    });
     if (currentTab === "files") renderFiles();
     else if (currentTab === "compare") renderCompare();
     else if (currentTab === "visualize") renderVisualize();
@@ -831,6 +929,18 @@
     $("metricsAll").addEventListener("click", function () { setMetrics(C.METRICS.map(function (m) { return m.code; })); });
     $("metricsNone").addEventListener("click", function () { setMetrics([]); });
     $("metricsDefault").addEventListener("click", function () { setMetrics(ORIGINAL_TEN.slice()); });
+    $("metricsRecommended").addEventListener("click", function () { setMetrics(RECOMMENDED.slice()); });
+    $("tableRows").addEventListener("click", function (e) {
+      var rows = e.target.getAttribute("data-rows");
+      if (rows) { state.tableRows = rows; render(); }
+    });
+    $("dropSingletons").addEventListener("click", function () { state.sizeMin = state.sizeMin >= 2 ? 1 : 2; refresh(); });
+    $("removeAll").addEventListener("click", function () {
+      if (!global.confirm("Remove all " + state.sets.length + " cluster sets?")) return;
+      state.sets = [];
+      state.sizeMin = 1; state.sizeMaxTouched = false; state.filterMode = "none"; state.approvedSeconds = 0;
+      refresh();
+    });
     $("matchA").addEventListener("change", function () { state.matchA = +this.value; render(); });
     $("matchB").addEventListener("change", function () { state.matchB = +this.value; render(); });
     $("downloadCsv").addEventListener("click", function () {
@@ -889,6 +999,7 @@
     });
     syncThemeButton();
 
+    if (global.innerWidth < 860) $("metricDetails").open = false; // phones: results first, metric chooser folded
     renderMetricList();
     refresh();
   }

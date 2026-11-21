@@ -612,7 +612,7 @@
         if (!sameObjects(objects[i], objects[j])) {
           throw new Error("\"" + sets[i].name + "\" (" + objects[i].size + " objects) and \"" + sets[j].name +
             "\" (" + objects[j].size + " objects) do not contain the same objects. " +
-            "Apply the intersection or superset filter in the Files tab first.");
+            "Choose how to make them comparable in step 1.");
         }
       }
     }

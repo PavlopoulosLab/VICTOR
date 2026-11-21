@@ -9,8 +9,8 @@
 <title>VICTOR: comparing cluster sets</title>
 <meta name="description" content="VICTOR is a visual analytics web application for comparing cluster sets. It runs entirely in your browser.">
 <link rel="icon" href="favicon.ico">
-<link rel="stylesheet" href="css/victor.css?v=5">
-<script src="js/theme.js?v=5"></script>
+<link rel="stylesheet" href="css/victor.css?v=7">
+<script src="js/theme.js?v=7"></script>
 </head>
 <body>
 
@@ -76,10 +76,10 @@
   <span class="spacer"></span>
   <button class="btn small" id="themeToggle" type="button" aria-pressed="false">Dark theme</button>
 </header>
-<nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
-  <button role="tab" data-tab="files" aria-selected="true">Files <span class="count" id="countSets">0</span></button>
-  <button role="tab" data-tab="compare" aria-selected="false">Compare</button>
-  <button role="tab" data-tab="visualize" aria-selected="false">Visualize</button>
+<nav class="tabs" id="tabs" role="tablist" aria-label="Steps">
+  <button role="tab" data-tab="files" aria-selected="true"><span class="step">1</span>Load &amp; prepare <span class="count" id="countSets">0</span></button>
+  <button role="tab" data-tab="compare" aria-selected="false"><span class="step">2</span>Compare</button>
+  <button role="tab" data-tab="visualize" aria-selected="false"><span class="step">3</span>Plots</button>
   <button role="tab" data-tab="quality" aria-selected="false">Network quality</button>
   <button role="tab" data-tab="help" aria-selected="false">Help</button>
 </nav>
@@ -106,27 +106,34 @@
           <button class="btn" id="exampleLoad" type="button">Load this example</button>
         </section>
         <section>
-          <h2>Filters</h2>
+          <h2>Which clusters and objects to keep</h2>
           <div class="field">
             <span>Cluster size from</span>
             <input type="number" id="sizeMin" min="1" value="1" aria-label="Minimum cluster size">
             <span>to</span>
             <input type="number" id="sizeMax" min="1" value="1" aria-label="Maximum cluster size">
           </div>
-          <p class="hint">Clusters outside this range are dropped from the selected sets.</p>
-          <label class="check"><input type="radio" name="filterMode" value="none" checked> <span>Keep all objects</span></label>
-          <label class="check"><input type="radio" name="filterMode" value="intersection"> <span><b>Intersection</b>: keep only objects present in every selected set</span></label>
-          <label class="check"><input type="radio" name="filterMode" value="superset"> <span><b>Superset</b>: add a singleton cluster for each object a set is missing</span></label>
-          <button class="btn small" id="resetFilters">Reset filters</button>
+          <p class="hint">Clusters outside this size range are dropped from the selected sets.</p>
+          <button class="btn small" id="dropSingletons" type="button">Drop singleton clusters</button>
+          <h3 class="mt8">When sets contain different objects</h3>
+          <label class="check"><input type="radio" name="filterMode" value="none" checked> <span>Leave them as they are</span></label>
+          <label class="check"><input type="radio" name="filterMode" value="intersection"> <span><b>Shared objects only</b> (intersection): keep the objects present in every selected set</span></label>
+          <label class="check"><input type="radio" name="filterMode" value="superset"> <span><b>All objects</b> (superset): give each set a singleton cluster for every object it is missing</span></label>
+          <button class="btn small" id="resetFilters">Reset</button>
         </section>
       </aside>
 
       <div class="content">
         <div class="empty" id="filesEmpty">
           <h2>Compare the results of different clusterings</h2>
-          <p>Load two or more cluster set files to see how similar they are, using 27 comparison metrics and five kinds of plots.</p>
+          <p>See how similar two or more groupings of the same objects are.</p>
+          <ol class="steps">
+            <li><b>Load</b> one file per clustering result, or try an example.</li>
+            <li><b>Make them comparable</b> if they do not contain the same objects. VICTOR tells you when and offers the fix.</li>
+            <li><b>Compare</b> with the metrics you choose, then <b>plot</b> the result.</li>
+          </ol>
           <div class="actions">
-            <button class="btn primary" id="emptyExample">Load the example cluster sets</button>
+            <button class="btn primary" id="emptyExample">Try with an example</button>
           </div>
         </div>
 
@@ -138,7 +145,7 @@
               <thead>
                 <tr>
                   <th><input type="checkbox" id="selectAll" aria-label="Select all cluster sets"></th>
-                  <th>Cluster set</th>
+                  <th>Cluster set <button class="btn link" id="removeAll" type="button">Remove all</button></th>
                   <th class="num">Clusters</th>
                   <th class="num">Objects</th>
                   <th class="num">Clusters after filters</th>
@@ -198,15 +205,19 @@
   <section class="tab" id="tab-compare" role="tabpanel">
     <div class="layout">
       <aside class="panel">
-        <section>
-          <h2>Metrics</h2>
+        <details id="metricDetails" open>
+          <summary><h2>Metrics</h2> <span class="count" id="metricCount">0</span></summary>
+          <div class="details-body">
           <div class="toolbar">
-            <button class="btn small" id="metricsAll">All</button>
-            <button class="btn small" id="metricsNone">None</button>
-            <button class="btn small" id="metricsDefault">Original ten</button>
+            <button class="btn small" id="metricsRecommended" type="button">Recommended</button>
+            <button class="btn small" id="metricsDefault" type="button">Original ten</button>
+            <button class="btn small" id="metricsAll" type="button">All</button>
+            <button class="btn small" id="metricsNone" type="button">None</button>
           </div>
+          <p class="hint">Not sure? "Recommended" picks six that are corrected for chance or easy to read. Point at a metric for a one-line explanation.</p>
           <div id="metricList"></div>
-        </section>
+        </div>
+        </details>
       </aside>
       <div class="content">
         <div class="notice" id="compareMessage" role="status"></div>
@@ -215,10 +226,15 @@
             <header>
               <h3>Pairwise similarity</h3>
               <div class="toolbar">
-                <p>Shading is relative within each row. Higher means more similar.</p>
+                <div class="segmented" id="tableRows" role="group" aria-label="Table rows">
+                  <button data-rows="metrics" aria-pressed="true" type="button">Metrics as rows</button>
+                  <button data-rows="pairs" aria-pressed="false" type="button">Pairs as rows</button>
+                </div>
                 <button class="btn small" id="downloadCsv">Download CSV</button>
               </div>
             </header>
+            <p id="compareSummary" class="summary"></p>
+            <p class="hint mb8">Higher means more similar; 1 is identical. Shading runs from the lowest to the highest value of each metric.</p>
             <div class="table-scroll"><table id="resultsTable"></table></div>
             <p class="hint" id="asymmetricNote" class="mt8"></p>
           </div>
@@ -350,7 +366,7 @@ N2	N11	0.3</pre>
       </div>
       <div>
         <h2>Preparing sets for comparison</h2>
-        <p>The compared sets must contain identical objects. All metrics except the two for overlapping clusterings also need strict partitions, where each object is in exactly one cluster. When the selected sets differ in their objects, use the filters in the Files tab:</p>
+        <p>The compared sets must contain identical objects. All metrics except the two for overlapping clusterings also need strict partitions, where each object is in exactly one cluster. When the selected sets differ in their objects, use the options in step 1 (Load &amp; prepare); VICTOR also offers them as buttons when it detects the mismatch:</p>
         <ul>
           <li><b>Cluster size range</b> drops clusters that are too small or too large, for example singletons.</li>
           <li><b>Intersection</b> keeps only the objects that every selected set contains.</li>
@@ -405,7 +421,7 @@ N2	N11	0.3</pre>
           <li><b>Sankey</b>: cluster sets as blocks joined by bands. Band thickness is relative to the other pairs shown, not an absolute scale.</li>
           <li><b>Network</b>: cluster sets as nodes; thicker edges mean more similar sets. Drag nodes to rearrange.</li>
           <li><b>Circos</b>: cluster sets as arcs; ribbons join the pairs, shaded by similarity.</li>
-          <li><b>UpSet</b> (Files tab): appears when the selected sets do not contain the same objects. Each column is a combination of sets, marked by the filled dots; its bar counts the objects found in exactly those sets and no others. The column with every dot filled is what the Intersection filter keeps.</li>
+          <li><b>UpSet</b> (step 1): appears when the selected sets do not contain the same objects. Each column is a combination of sets, marked by the filled dots; its bar counts the objects found in exactly those sets and no others. The column with every dot filled is what the Intersection filter keeps.</li>
         </ul>
         <p class="mt8">"Hide below" removes the pairs whose similarity is under the chosen value. Every plot has an Export button that saves it as PNG, SVG, PDF, JPEG or WebP at up to six times the on-screen resolution, on a theme-coloured, white or transparent background.</p>
       </div>
@@ -473,10 +489,10 @@ N2	N11	0.3</pre>
 
 <footer>VICTOR runs entirely in your browser. Open-source under the AGPL-3.0 licence.</footer>
 
-<script src="lib/d3.v5.min.js?v=5"></script>
-<script src="js/core.js?v=5"></script>
-<script src="js/charts.js?v=5"></script>
-<script src="js/examples.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
+<script src="lib/d3.v5.min.js?v=7"></script>
+<script src="js/core.js?v=7"></script>
+<script src="js/charts.js?v=7"></script>
+<script src="js/examples.js?v=7"></script>
+<script src="js/app.js?v=7"></script>
 </body>
 </html>
