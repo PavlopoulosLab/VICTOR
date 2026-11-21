@@ -354,6 +354,19 @@ cluster3	F06,F11</pre></div>
             <input type="range" id="vizThreshold" min="0" max="1" step="0.01" value="0">
             <output id="vizThresholdValue" for="vizThreshold">0.00</output>
           </label>
+          <span class="field" id="levelField" hidden>
+            <span>Show</span>
+            <span class="segmented" id="vizLevel" role="group" aria-label="What the plot shows">
+              <button data-level="sets" aria-pressed="true" type="button">Similarity of sets</button>
+              <button data-level="clusters" aria-pressed="false" type="button">Objects between clusters</button>
+            </span>
+            <select id="topClusters" aria-label="Clusters shown per set">
+              <option value="8">8 largest clusters</option>
+              <option value="12" selected>12 largest clusters</option>
+              <option value="20">20 largest clusters</option>
+              <option value="40">40 largest clusters</option>
+            </select>
+          </span>
           <span class="field" id="netLayoutField" hidden><label for="netLayout">Layout</label>
             <select id="netLayout"></select>
             <button class="btn small" id="netFit" type="button">Fit to view</button>
@@ -624,11 +637,11 @@ N2	N11	0.3</pre>
         <ul>
           <li><b>Heatmap</b> (the default): all pairs in a grid, with rows and columns ordered by average-linkage hierarchical clustering so that similar sets sit together. The diagonal is left neutral. It stays readable with many sets.</li>
           <li><b>Ranking</b>: one bar per cluster set, its average similarity to all the others, with a line from its lowest to its highest value. Shows which result agrees most with the rest.</li>
-          <li><b>Map</b>: every cluster set as a point, placed by multidimensional scaling so that similar sets are close. The note under the title says how faithfully the distances are reproduced.</li>
+          <li><b>Map</b>: every cluster set as a point, placed by multidimensional scaling (a classical start refined by stress minimization) so that the distances between points match one minus the similarity as closely as a plane allows. The note under the title says how faithfully they are reproduced. Methods such as UMAP or t-SNE are not used: they are built for hundreds of points and preserve neighbourhoods rather than distances, so with a handful of cluster sets their layout would mostly reflect their settings.</li>
           <li><b>Pair bars</b>: one bar per pair of cluster sets, sorted by similarity. Limited to the 30 most similar pairs when there are more.</li>
-          <li><b>Sankey</b>: cluster sets as blocks joined by bands. Band thickness is relative to the other pairs shown, not an absolute scale.</li>
+          <li><b>Sankey</b>: two views. <i>Similarity of sets</i> shows cluster sets as blocks joined by bands whose thickness is relative to the other pairs shown; hover a set to isolate its bands and drag it to rearrange. <i>Objects between clusters</i> shows every cluster as a block sized by its objects, one column per cluster set, with bands for the objects two clusters share: hover to highlight, click a cluster to follow its objects through every set, drag a cluster to reorder its column.</li>
           <li><b>Network</b>: cluster sets as nodes; thicker edges mean more similar sets. Choose between force-directed, concentric, circle, grid, tree and random layouts; scroll or pinch to zoom, drag the background to pan and drag nodes to move them.</li>
-          <li><b>Circos</b>: cluster sets as arcs; ribbons join the pairs, shaded by similarity.</li>
+          <li><b>Circos</b>: two views. <i>Similarity of sets</i> shows cluster sets as arcs joined by ribbons shaded by similarity. <i>Objects between clusters</i> shows every cluster as an arc, grouped and coloured by its set, with ribbons for the objects that clusters of different sets share; hover an arc to isolate a cluster and click to keep it isolated.</li>
           <li><b>UpSet</b> (step 1): appears when the selected sets do not contain the same objects. Each column is a combination of sets, marked by the filled dots; its bar counts the objects found in exactly those sets and no others. The column with every dot filled is what the Intersection filter keeps.</li>
         </ul>
         <p class="mt8">"Hide below" removes the pairs whose similarity is under the chosen value. Every plot has an Export button that saves it as PNG, SVG, PDF, JPEG or WebP at up to six times the on-screen resolution, on a theme-coloured, white or transparent background.</p>

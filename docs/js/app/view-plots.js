@@ -1,6 +1,6 @@
 /* VICTOR app: Step 3, Plots: heatmap, ranking, map and the pair plots of one metric. */
-import { C, CROWDED_ABOVE_SETS, G, MAX_PAIR_BARS, PAIR_PLOTS, VIZ_NOTES, VIZ_TITLES } from "./config.js";
-import { state } from "./state.js";
+import { C, CLUSTER_PLOTS, CROWDED_ABOVE_SETS, G, MAX_PAIR_BARS, PAIR_PLOTS, VIZ_NOTES, VIZ_TITLES } from "./config.js";
+import { setById, state } from "./state.js";
 import { $, empty, fillSelect, linkTo, setNotice, setPressed } from "./dom.js";
 import { pairList } from "./data.js";
 import { infoButton } from "./info.js";
@@ -26,6 +26,73 @@ function distanceMatrix(r, matrix) {
   return r.names.map(function (a, i) { return r.names.map(function (b, j) { return i === j ? 0 : Math.max(0, 1 - symmetric(matrix, i, j)); }); });
 }
 
+// One column per cluster set (similar sets next to each other), one node per cluster: the largest `top`
+// clusters, and one node for all the others.
+function clusterColumns(r, top) {
+  var order = r.names.length > 2 ? C.hclust(distanceMatrix(r, r.matrix[state.viz.metric])).order : r.names.map(function (n, i) { return i; });
+  return order.map(function (idx) {
+    var clusters = setById(r.ids[idx]).filtered.slice().sort(function (a, b) { return b.members.length - a.members.length; });
+    var nodes = clusters.slice(0, top).map(function (c) { return { name: c.name, size: c.members.length, members: c.members }; });
+    var rest = clusters.slice(top);
+    if (rest.length) {
+      var members = [];
+      rest.forEach(function (c) { members = members.concat(c.members); });
+      nodes.push({ name: "Other (" + rest.length + " clusters)", size: members.length, members: members });
+    }
+    var where = new Map();
+    nodes.forEach(function (n, i) { n.members.forEach(function (o) { where.set(o, i); }); });
+    return { name: r.names[idx], nodes: nodes, where: where };
+  });
+}
+
+// Objects shared by the nodes of two columns: [{ i, j, value }]
+function flowBetween(a, b) {
+  var counts = new Map(), J = b.nodes.length, out = [];
+  a.where.forEach(function (i, object) { var key = i * J + b.where.get(object); counts.set(key, (counts.get(key) || 0) + 1); });
+  counts.forEach(function (value, key) { out.push({ i: Math.floor(key / J), j: key % J, value: value }); });
+  return out;
+}
+
+// Where the objects of one node are in every column and on every band between neighbouring columns
+function traceObjects(columns, k, i) {
+  var nodes = columns.map(function (c) { return new Array(c.nodes.length).fill(0); }), links = {};
+  columns[k].nodes[i].members.forEach(function (object) {
+    columns.forEach(function (c, col) {
+      var at = c.where.get(object);
+      nodes[col][at]++;
+      if (col + 1 < columns.length) {
+        var key = col + "|" + at + "|" + columns[col + 1].where.get(object);
+        links[key] = (links[key] || 0) + 1;
+      }
+    });
+  });
+  return { nodes: nodes, links: links };
+}
+
+// Sankey or circos of the objects flowing between clusters. Returns the sentences describing it.
+function drawClusterPlot(r, chart, label) {
+  var overlapping = r.ids.some(function (id) { return setById(id).overlapping > 0; });
+  if (overlapping) {
+    G.bars(chart, [], { empty: "This view needs cluster sets in which every object is in exactly one cluster." });
+    return [];
+  }
+  var columns = clusterColumns(r, state.viz.topClusters), notes = [CLUSTER_PLOTS[state.viz.kind]];
+  if (state.viz.kind === "sankey") {
+    var links = [];
+    columns.slice(0, -1).forEach(function (c, k) { flowBetween(c, columns[k + 1]).forEach(function (l) { links.push({ k: k, i: l.i, j: l.j, value: l.value }); }); });
+    G.alluvial(chart, columns, links, { label: label, trace: function (k, i) { return traceObjects(columns, k, i); } });
+  } else {
+    var pairs = [];
+    columns.forEach(function (a, x) {
+      columns.slice(x + 1).forEach(function (b, off) { flowBetween(a, b).forEach(function (l) { pairs.push({ a: x, i: l.i, b: x + 1 + off, j: l.j, value: l.value }); }); });
+    });
+    G.clusterChord(chart, columns, pairs, { label: label });
+    if (columns.length > 4) notes.push("With " + columns.length + " sets there are many ribbons: untick sets in step 1, show fewer clusters, or click an arc to isolate it.");
+  }
+  if (columns.some(function (c) { return /^Other \(/.test(c.nodes[c.nodes.length - 1].name); })) notes.push("Clusters beyond the " + state.viz.topClusters + " largest of a set are merged into \"Other\".");
+  return notes;
+}
+
 // Metric selector, threshold slider and plot-type buttons
 function renderPlotControls(r, pairs) {
   var v = state.viz, values = pairs.map(function (p) { return p.value; });
@@ -38,7 +105,12 @@ function renderPlotControls(r, pairs) {
   slider.value = v.threshold;
   slider.disabled = !(hi > lo);
   $("vizThresholdValue").textContent = Number(v.threshold).toFixed(2);
-  $("vizThresholdField").hidden = !PAIR_PLOTS[v.kind];
+  var byClusters = !!CLUSTER_PLOTS[v.kind] && v.level === "clusters";
+  $("vizThresholdField").hidden = !PAIR_PLOTS[v.kind] || byClusters;
+  $("levelField").hidden = !CLUSTER_PLOTS[v.kind];
+  setPressed($("vizLevel"), "level", v.level);
+  $("topClusters").hidden = !byClusters;
+  $("topClusters").value = String(v.topClusters);
   setPressed($("vizKind"), "kind", v.kind);
   $("netLayoutField").hidden = v.kind !== "network";
   if (!$("netLayout").options.length) fillSelect($("netLayout"), Object.keys(G.NETWORK_LAYOUTS).map(function (k) { return [k, G.NETWORK_LAYOUTS[k]]; }), v.layout);
@@ -53,6 +125,7 @@ function drawPlot(r, pairs) {
   var opts = { metric: def.label, label: VIZ_TITLES[v.kind] + " of " + def.label }, notes = [VIZ_NOTES[v.kind]];
   var shown = pairs.filter(function (p) { return p.value >= v.threshold - 1e-9; });
   var pairLabel = function (p) { return r.names[p.i] + " vs " + r.names[p.j]; };
+  if (CLUSTER_PLOTS[v.kind] && v.level === "clusters") return drawClusterPlot(r, chart, VIZ_TITLES[v.kind] + " of the objects shared between clusters");
   if (v.kind === "ranking") {
     if (r.names.length < 3) notes.push("With two sets there is a single pair, so both bars are equal.");
     opts.empty = "Nothing to rank.";
@@ -108,6 +181,7 @@ export function renderVisualize() {
   if (state.viz.kind === "map" && r.names.length < 3) state.viz.kind = "heatmap";
   var pairs = pairList();
   renderPlotControls(r, pairs);
-  $("vizTitle").textContent = VIZ_TITLES[state.viz.kind] + ": " + C.metricByCode(state.viz.metric).label;
+  $("vizTitle").textContent = VIZ_TITLES[state.viz.kind] + ": " +
+    (CLUSTER_PLOTS[state.viz.kind] && state.viz.level === "clusters" ? "objects shared between clusters" : C.metricByCode(state.viz.metric).label);
   $("vizNote").textContent = drawPlot(r, pairs).join(" ");
 }

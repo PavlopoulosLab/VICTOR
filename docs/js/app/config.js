@@ -77,6 +77,11 @@ export var EXAMPLES = [
 
 export var VIZ_TITLES = { heatmap: "Hierarchical heatmap", ranking: "Average similarity of each set", map: "Similarity map", bar: "Bar plot of pairs",
   sankey: "Sankey plot", network: "Network of cluster sets", circos: "Circos plot" };
+// plots that can also show the flow of objects between clusters, and what to say about them
+export var CLUSTER_PLOTS = {
+  sankey: "Each column is a cluster set and each block a cluster, sized by its objects; a band shows the objects two neighbouring clusters share. Similar sets are placed next to each other.",
+  circos: "Each arc is a cluster, grouped and coloured by its cluster set; a ribbon shows the objects that two clusters of different sets share."
+};
 export var MAX_PAIR_BARS = 30; // a bar per pair stops being readable beyond this; the heatmap shows all pairs
 // plots that show the selected pairs (and so follow "Hide below"); the others always use every pair
 export var PAIR_PLOTS = { bar: true, sankey: true, network: true, circos: true, heatmap: true };

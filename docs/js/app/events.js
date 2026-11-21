@@ -127,6 +127,8 @@ function initPlots() {
   on("vizThreshold", "input", function () { state.viz.threshold = +this.value; render(); });
   on("netLayout", "change", function () { state.viz.layout = this.value; render(); });
   on("netFit", "click", function () { G.fitNetwork($("vizChart")); });
+  onChoice("vizLevel", "level", function (level) { state.viz.level = level; render(); });
+  on("topClusters", "change", function () { state.viz.topClusters = +this.value; render(); });
   initExportDialog();
 }
 

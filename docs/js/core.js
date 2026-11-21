@@ -697,10 +697,13 @@
   }
 
   // ---------------------------------------------------------------- 2D map of a distance matrix
-  // Classical multidimensional scaling: places n items in the plane so that their distances approximate
-  // the given symmetric distance matrix. Returns { points: [[x, y]], fit }, where fit is the correlation
-  // between the given distances and the distances in the plane (1 = reproduced exactly).
-  function mds(dist) {
+  // Multidimensional scaling: places n items in the plane so that their distances approximate the given
+  // symmetric distance matrix. It starts from classical (eigenvector) scaling and then, unless
+  // options.refine is false, moves the points to minimize the squared differences between the given and the
+  // drawn distances (SMACOF), which matters when the distances cannot be drawn exactly in a plane.
+  // Returns { points: [[x, y]], fit, stress }: fit is the correlation between given and drawn distances
+  // (1 = reproduced exactly), stress the normalized sum of squared differences (0 = exact).
+  function mds(dist, options) {
     var n = dist.length, i, j, k;
     if (n === 0) return { points: [], fit: null };
     if (n === 1) return { points: [[0, 0]], fit: null };
@@ -737,12 +740,40 @@
     var sx = Math.sqrt(Math.max(first.value, 0)), sy = Math.sqrt(Math.max(second.value, 0));
     var points = [];
     for (k = 0; k < n; k++) points.push([first.vector[k] * sx, second.vector[k] * sy]);
+    function gap(a, b) { return Math.sqrt(Math.pow(points[a][0] - points[b][0], 2) + Math.pow(points[a][1] - points[b][1], 2)); }
+    function rawStress() {
+      var sum = 0;
+      for (var a = 0; a < n; a++) for (var b = a + 1; b < n; b++) sum += Math.pow(gap(a, b) - dist[a][b], 2);
+      return sum;
+    }
+    if (!options || options.refine !== false) {
+      // a flat start cannot leave its line, so give the second axis a small fixed nudge
+      if (sy < 1e-9) for (k = 0; k < n; k++) points[k][1] = 1e-3 * Math.sin(k * 7.1 + 0.5);
+      var previous = rawStress();
+      for (var round = 0; round < 500; round++) {
+        var moved = points.map(function () { return [0, 0]; });
+        for (i = 0; i < n; i++) {
+          for (j = 0; j < n; j++) {
+            if (i === j) continue;
+            var d = gap(i, j), ratio = d > 1e-12 ? dist[i][j] / d : 0;
+            moved[i][0] += ratio * (points[i][0] - points[j][0]);
+            moved[i][1] += ratio * (points[i][1] - points[j][1]);
+          }
+        }
+        points = moved.map(function (p) { return [p[0] / n, p[1] / n]; });
+        var now = rawStress();
+        if (previous - now < 1e-12 * Math.max(1, previous)) break;
+        previous = now;
+      }
+    }
     // how well the plane reproduces the distances
-    var given = [], drawn = [];
+    var given = [], drawn = [], squares = 0;
     for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) {
       given.push(dist[i][j]);
-      drawn.push(Math.sqrt(Math.pow(points[i][0] - points[j][0], 2) + Math.pow(points[i][1] - points[j][1], 2)));
+      drawn.push(gap(i, j));
+      squares += dist[i][j] * dist[i][j];
     }
+    var stress = squares > 0 ? Math.sqrt(rawStress() / squares) : 0;
     var fit = null;
     if (given.length > 1) {
       var mg = 0, md = 0, sgd = 0, sgg = 0, sdd = 0;
@@ -751,7 +782,7 @@
       given.forEach(function (v, q) { sgd += (v - mg) * (drawn[q] - md); sgg += (v - mg) * (v - mg); sdd += (drawn[q] - md) * (drawn[q] - md); });
       fit = sgg > 0 && sdd > 0 ? sgd / Math.sqrt(sgg * sdd) : null;
     }
-    return { points: points, fit: fit };
+    return { points: points, fit: fit, stress: stress };
   }
 
   // ---------------------------------------------------------------- network cluster quality

@@ -596,7 +596,200 @@
       .attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
     ng.append("rect").attr("width", 16).attr("height", function (d) { return Math.max(d.dy, 2); }).attr("rx", 3).attr("fill", t.muted);
     ng.append("text").attr("x", 22).attr("y", function (d) { return Math.max(d.dy, 2) / 2 + 4; }).attr("fill", t.text)
-      .text(function (d) { return clip(d.name, narrow(W) ? 11 : 20); }).append("title").text(function (d) { return d.name; });
+      .text(function (d) { return clip(d.name, narrow(W) ? 11 : 20); });
+    // hovering a set isolates its bands; dragging it up or down rearranges the plot
+    hover(ng, function (d) {
+      var rows = links.filter(function (l) { return l.source === d || l.target === d; }).sort(function (a, b) { return b.original - a.original; })
+        .slice(0, 6).map(function (l) { return [l.source === d ? l.target.name : l.source.name, fmt(l.original)]; });
+      return [d.name, rows];
+    }, function (d) {
+      paths.attr("stroke-opacity", function (l) { return l.source === d || l.target === d ? 0.95 : 0.08; });
+    }, function () { paths.attr("stroke-opacity", 0.6); });
+    var innerH = H - m.top - m.bottom;
+    ng.attr("cursor", "grab").call(d3.drag().on("drag", function (d) {
+      d.y = Math.max(0, Math.min(innerH - d.dy, d.y + d3.event.dy));
+      d3.select(this).attr("transform", "translate(" + d.x + "," + d.y + ")");
+      paths.attr("d", linkPath);
+      hideTip();
+    }));
+  }
+
+  // ---------------------------------------------------------------- cluster-level Sankey (alluvial plot)
+  // columns: [{ name, nodes: [{ name, size }] }] (one column per cluster set, one node per cluster)
+  // links: [{ k, i, j, value }] objects shared by node i of column k and node j of column k + 1
+  // opts.trace(k, i) -> { nodes: [[count per node] per column], links: { "k|i|j": count } } for the objects of one cluster
+  function alluvial(el, columns, links, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme();
+    if (columns.length < 2) return emptyState(el, "Select at least two cluster sets.");
+    var W = chartWidth(el), small = narrow(W), nodeW = 14, pad = 6;
+    var maxNodes = d3.max(columns, function (c) { return c.nodes.length; }), total = d3.sum(columns[0].nodes, function (n) { return n.size; });
+    var m = { top: 58, bottom: 14, left: 8, right: small ? 64 : 140 }, H = Math.max(380, Math.min(780, m.top + m.bottom + maxNodes * 30));
+    var innerH = H - m.top - m.bottom, ky = Math.max(0.0001, (innerH - pad * (maxNodes - 1)) / total);
+    var colX = function (k) { return m.left + k * (W - m.left - m.right - nodeW) / (columns.length - 1); };
+    var cols = columns.map(function (c, k) {
+      return c.nodes.map(function (n, i) { return { k: k, i: i, name: n.name, set: c.name, size: n.size, h: Math.max(1, n.size * ky), out: [], inn: [], y: 0 }; });
+    });
+    var L = links.map(function (l) {
+      var d = { source: cols[l.k][l.i], target: cols[l.k + 1][l.j], value: l.value, h: l.value * ky, key: l.k + "|" + l.i + "|" + l.j };
+      d.source.out.push(d);
+      d.target.inn.push(d);
+      return d;
+    });
+    var centre = function (n) { return n.y + n.h / 2; };
+    function place(col, order) { // stacks the nodes of a column in the given order, centred vertically
+      var used = d3.sum(order, function (n) { return n.h; }) + pad * (order.length - 1), y = m.top + Math.max(0, (innerH - used) / 2);
+      order.forEach(function (n) { n.y = y; y += n.h + pad; });
+    }
+    // first column by size; every next column next to where its objects come from, which keeps crossings low
+    cols.forEach(function (col, k) {
+      var order = col.slice();
+      if (k === 0) order.sort(function (a, b) { return b.size - a.size; });
+      else order.sort(function (a, b) {
+        var pos = function (n) { var w = d3.sum(n.inn, function (l) { return l.value; }); return w ? d3.sum(n.inn, function (l) { return l.value * centre(l.source); }) / w : 0; };
+        return pos(a) - pos(b);
+      });
+      place(col, order);
+    });
+    function stackLinks() {
+      cols.forEach(function (col) {
+        col.forEach(function (n) {
+          var y = 0;
+          n.out.sort(function (a, b) { return a.target.y - b.target.y; }).forEach(function (l) { l.sy = y; y += l.h; });
+          y = 0;
+          n.inn.sort(function (a, b) { return a.source.y - b.source.y; }).forEach(function (l) { l.ty = y; y += l.h; });
+        });
+      });
+    }
+    function ribbon(d, h) { // band of height h starting at the top of the link
+      var x0 = colX(d.source.k) + nodeW, x1 = colX(d.target.k), xm = (x0 + x1) / 2, s0 = d.source.y + d.sy, t0 = d.target.y + d.ty;
+      return "M" + x0 + "," + s0 + "C" + xm + "," + s0 + " " + xm + "," + t0 + " " + x1 + "," + t0 + "L" + x1 + "," + (t0 + h) +
+        "C" + xm + "," + (t0 + h) + " " + xm + "," + (s0 + h) + " " + x0 + "," + (s0 + h) + "Z";
+    }
+    var svg = svgRoot(el, W, H, opts.label), pinned = null, traced = null;
+    var caption = svg.append("text").attr("x", m.left).attr("y", 14).attr("fill", t.muted).attr("font-size", 12);
+    columns.forEach(function (c, k) {
+      svg.append("text").attr("x", colX(k)).attr("y", m.top - 12).attr("fill", t.text).attr("font-weight", 600)
+        .text(clip(c.name, Math.max(4, Math.floor((colX(1) - colX(0)) / 7.4))));
+    });
+    var linkSel = svg.append("g").selectAll("path").data(L).enter().append("path").attr("fill", t.series[0]).attr("fill-opacity", 0.32);
+    var traceSel = svg.append("g").attr("pointer-events", "none").selectAll("path").data(L).enter().append("path").attr("fill", t.series[1]).attr("fill-opacity", 0.9);
+    var allNodes = d3.merge(cols);
+    var nodeSel = svg.append("g").selectAll("g").data(allNodes).enter().append("g").attr("cursor", "grab");
+    nodeSel.append("rect").attr("class", "block").attr("width", nodeW).attr("rx", 3).attr("fill", t.muted);
+    nodeSel.append("rect").attr("class", "trace").attr("width", nodeW).attr("rx", 3).attr("fill", t.series[1]).attr("pointer-events", "none");
+    nodeSel.append("text").attr("x", nodeW + 5).attr("fill", t.text).attr("font-size", 11)
+      .attr("paint-order", "stroke").attr("stroke", t.surface).attr("stroke-width", 3)
+      .text(function (d) { return d.h >= 11 ? clip(d.name, small ? 8 : 18) : ""; });
+    function sayCaption() {
+      caption.text(pinned
+        ? (small ? "Following " + pinned.size.toLocaleString() + " objects of " + clip(pinned.name, 14) + " (orange)."
+          : "Following the " + pinned.size.toLocaleString() + " objects of " + clip(pinned.set, 18) + ": " + clip(pinned.name, 18) + " (orange). Click it again to stop.")
+        : (small ? "Tap a cluster to follow its objects." : "Hover to highlight, click a cluster to follow its objects, drag a cluster to reorder."));
+    }
+    function update() {
+      stackLinks();
+      linkSel.attr("d", function (d) { return ribbon(d, d.h); });
+      traceSel.attr("d", function (d) { var c = traced ? traced.links[d.key] || 0 : 0; return c ? ribbon(d, c * ky) : ""; });
+      nodeSel.attr("transform", function (d) { return "translate(" + colX(d.k) + "," + d.y + ")"; });
+      nodeSel.select("rect.block").attr("height", function (d) { return d.h; });
+      nodeSel.select("rect.trace").attr("height", function (d) { return traced ? (traced.nodes[d.k][d.i] || 0) * ky : 0; });
+      nodeSel.select("text").attr("y", function (d) { return d.h / 2 + 4; });
+      sayCaption();
+    }
+    function dim(node) {
+      linkSel.attr("fill-opacity", function (l) { return !node ? 0.32 : (l.source === node || l.target === node ? 0.7 : 0.07); });
+    }
+    function share(part, whole) { return whole ? Math.round(100 * part / whole) + "%" : ""; }
+    hover(linkSel, function (d) {
+      var rows = [["Shared objects", d.value.toLocaleString()], ["Of " + clip(d.source.name, 16), share(d.value, d.source.size)], ["Of " + clip(d.target.name, 16), share(d.value, d.target.size)]];
+      if (traced && traced.links[d.key]) rows.push(["From the followed cluster", traced.links[d.key].toLocaleString()]);
+      return [d.source.set + ": " + d.source.name + " \u2192 " + d.target.set + ": " + d.target.name, rows];
+    }, function () { this.setAttribute("fill-opacity", 0.75); }, function () { dim(null); });
+    hover(nodeSel, function (d) {
+      var rows = [["Objects", d.size.toLocaleString() + " (" + share(d.size, total) + ")"]];
+      d.out.concat(d.inn).sort(function (a, b) { return b.value - a.value; }).slice(0, 4).forEach(function (l) {
+        var other = l.source === d ? l.target : l.source;
+        rows.push([clip(other.set, 12) + ": " + clip(other.name, 14), l.value.toLocaleString()]);
+      });
+      if (traced && d !== pinned) rows.push(["From the followed cluster", (traced.nodes[d.k][d.i] || 0).toLocaleString()]);
+      return [d.set + ": " + d.name, rows];
+    }, function (d) { dim(d); }, function () { dim(null); });
+    nodeSel.on("click", function (d) {
+      pinned = pinned === d ? null : d;
+      traced = pinned && opts.trace ? opts.trace(d.k, d.i) : null;
+      nodeSel.select("rect.block").attr("stroke", function (n) { return n === pinned ? t.text : "none"; }).attr("stroke-width", 2);
+      update();
+    });
+    nodeSel.call(d3.drag().on("drag", function (d) {
+      d.y = Math.max(m.top, Math.min(H - m.bottom - d.h, d.y + d3.event.dy));
+      hideTip();
+      update();
+    }).on("end", function (d) { // settle the column in its new order
+      place(cols[d.k], cols[d.k].slice().sort(function (a, b) { return a.y - b.y; }));
+      update();
+    }));
+    update();
+  }
+
+  // ---------------------------------------------------------------- cluster-level circos
+  // sets: [{ name, nodes: [{ name, size }] }], links: [{ a, i, b, j, value }] objects shared by cluster i of set a
+  // and cluster j of set b. Every arc is a cluster, grouped and coloured by its set.
+  function clusterChord(el, sets, links, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme();
+    if (sets.length < 2 || links.length === 0) return emptyState(el, "Select at least two cluster sets.");
+    var W = chartWidth(el), size = Math.min(W, 700), small = narrow(W), ringPad = small ? 34 : 64;
+    var outer = size / 2 - ringPad, inner = outer - 12;
+    var offset = [], flat = [];
+    sets.forEach(function (s, a) { offset.push(flat.length); s.nodes.forEach(function (n, i) { flat.push({ a: a, i: i, name: n.name, size: n.size, set: s.name }); }); });
+    var n = flat.length, matrix = d3.range(n).map(function () { return new Array(n).fill(0); });
+    links.forEach(function (l) { var p = offset[l.a] + l.i, q = offset[l.b] + l.j; matrix[p][q] = l.value; matrix[q][p] = l.value; });
+    var chords = d3.chord().padAngle(Math.min(0.03, 1.2 / n))(matrix);
+    var color = function (a) { return t.series[a % t.series.length]; };
+    var svg = svgRoot(el, W, size, opts.label), g = svg.append("g").attr("transform", "translate(" + W / 2 + "," + size / 2 + ")");
+    var caption = svg.append("text").attr("x", 8).attr("y", 14).attr("fill", t.muted).attr("font-size", 12);
+    var ribbons = g.append("g").selectAll("path").data(chords).enter().append("path")
+      .attr("d", d3.ribbon().radius(inner - 2)).attr("fill", function (d) { return color(flat[d.source.index].a); })
+      .attr("fill-opacity", 0.45).attr("stroke", t.surface).attr("stroke-width", 0.5);
+    var arcs = g.append("g").selectAll("path").data(chords.groups).enter().append("path")
+      .attr("d", d3.arc().innerRadius(inner).outerRadius(outer)).attr("fill", function (d) { return color(flat[d.index].a); })
+      .attr("stroke", t.surface).attr("stroke-width", 1).attr("cursor", "pointer");
+    // an outer ring and a label per cluster set
+    sets.forEach(function (s, a) {
+      var groups = chords.groups.filter(function (d) { return flat[d.index].a === a && d.value > 0; });
+      if (!groups.length) return;
+      var start = d3.min(groups, function (d) { return d.startAngle; }), end = d3.max(groups, function (d) { return d.endAngle; }), mid = (start + end) / 2;
+      g.append("path").attr("d", d3.arc().innerRadius(outer + 4).outerRadius(outer + 8).startAngle(start).endAngle(end)()).attr("fill", color(a));
+      var r = outer + 20, lx = r * Math.sin(mid), ly = -r * Math.cos(mid);
+      g.append("text").attr("x", lx).attr("y", ly).attr("dy", "0.35em").attr("fill", t.text).attr("font-weight", 600)
+        .attr("text-anchor", Math.abs(lx) < 20 ? "middle" : lx > 0 ? "start" : "end")
+        .attr("paint-order", "stroke").attr("stroke", t.surface).attr("stroke-width", 3)
+        .text(clip(s.name, small ? 9 : 20));
+    });
+    var pinned = null;
+    function show(index) {
+      ribbons.attr("fill-opacity", function (r) { return index === null ? 0.45 : (r.source.index === index || r.target.index === index ? 0.85 : 0.04); });
+      arcs.attr("stroke", function (d) { return d.index === pinned ? t.text : t.surface; }).attr("stroke-width", function (d) { return d.index === pinned ? 2.5 : 1; });
+      caption.text(pinned === null ? "Hover an arc to isolate a cluster; click it to keep it isolated."
+        : "Showing only " + clip(flat[pinned].set, 18) + ": " + clip(flat[pinned].name, 18) + ". Click it again to show everything.");
+    }
+    hover(arcs, function (d) {
+      var c = flat[d.index], rows = [["Objects", c.size.toLocaleString()]];
+      chords.filter(function (r) { return r.source.index === d.index || r.target.index === d.index; })
+        .map(function (r) { var other = flat[r.source.index === d.index ? r.target.index : r.source.index]; return [clip(other.set, 12) + ": " + clip(other.name, 14), matrix[r.source.index][r.target.index]]; })
+        .sort(function (x, y) { return y[1] - x[1]; }).slice(0, 5).forEach(function (row) { rows.push([row[0], row[1].toLocaleString()]); });
+      return [c.set + ": " + c.name, rows];
+    }, function (d) { show(d.index); }, function () { show(pinned); });
+    arcs.on("click", function (d) { pinned = pinned === d.index ? null : d.index; show(pinned); });
+    hover(ribbons, function (d) {
+      var p = flat[d.source.index], q = flat[d.target.index], v = matrix[d.source.index][d.target.index];
+      return [p.set + ": " + p.name + " \u2194 " + q.set + ": " + q.name,
+        [["Shared objects", v.toLocaleString()], ["Of " + clip(p.name, 16), Math.round(100 * v / p.size) + "%"], ["Of " + clip(q.name, 16), Math.round(100 * v / q.size) + "%"]]];
+    }, function () { this.setAttribute("fill-opacity", 0.95); }, function () { show(pinned); });
+    show(null);
   }
 
   // ---------------------------------------------------------------- networks (Cytoscape.js)
@@ -951,7 +1144,7 @@
   VICTOR.charts = {
     theme: theme, sequential: sequential, readableOn: readableOn, fmt: fmt,
     columns: columns, histogram: histogram, bars: bars, upset: upset, map: map, heatmap: heatmap, sankey: sankey,
-    network: network, chord: chord, graph: graph, fitNetwork: fitNetwork, NETWORK_LAYOUTS: NETWORK_LAYOUTS,
+    network: network, chord: chord, graph: graph, alluvial: alluvial, clusterChord: clusterChord, fitNetwork: fitNetwork, NETWORK_LAYOUTS: NETWORK_LAYOUTS,
     exportImage: exportImage, exportSource: exportSource, EXPORT_FORMATS: EXPORT_FORMATS, TITLE_BAND: TITLE_BAND, download: download
   };
 })(window);

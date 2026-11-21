@@ -241,6 +241,13 @@
   }
   check("mds reproduces the distances of a planar configuration, fit = 1", okMds && close(placed.fit, 1, 1e-9), JSON.stringify(placed.points));
 
+  // distances that cannot be drawn in a plane (all pairs of 6 items equally far, except one close pair):
+  // the refinement must not be worse than the classical start
+  var odd6 = [0, 1, 2, 3, 4, 5].map(function (a) { return [0, 1, 2, 3, 4, 5].map(function (b) { return a === b ? 0 : (a + b === 1 ? 0.1 : 1); }); });
+  var startMds = C.mds(odd6, { refine: false }), refinedMds = C.mds(odd6);
+  check("mds refinement lowers the stress of a configuration that does not fit a plane",
+    refinedMds.stress < startMds.stress - 1e-6 && refinedMds.fit >= startMds.fit - 1e-9, startMds.stress.toFixed(3) + " -> " + refinedMds.stress.toFixed(3) + ", fit " + startMds.fit.toFixed(2) + " -> " + refinedMds.fit.toFixed(2));
+
   // 8. network: two triangles joined by one edge
   var net = C.parseEdgeList("a\tb\nb\tc\na\tc\nd e\ne f\nd f\nc d\nc d\nx x\n");
   var q = C.clusterQuality(net, [{ name: "C1", members: ["a", "b", "c"] }, { name: "C2", members: ["d", "e", "f", "zz"] }]);
