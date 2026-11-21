@@ -385,3 +385,13 @@ tr.pickable:hover td { background: var(--surface-2); }
 tr.picked td { background: var(--surface-2); }
 tr.picked td:first-child { box-shadow: inset 3px 0 0 var(--accent); font-weight: 650; }
 td.best { font-weight: 700; }
+
+/* "Open in NORMA" button, in NORMA's own colours with its icon */
+.norma-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 14px; font-size: 15px; font-weight: 550;
+  background: linear-gradient(135deg, #0f172a, #1e293b); color: #f1f5f9; border: 1px solid #0f172a; border-radius: 10px;
+}
+.norma-btn img { display: block; border-radius: 7px; flex: 0 0 auto; max-width: none; }
+.norma-btn b { font-weight: 750; letter-spacing: 0.04em; background: linear-gradient(90deg, #2dd4bf, #fbbf24); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.norma-btn:hover { border-color: #14b8a6; box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.35); }
+.norma-btn:disabled { box-shadow: none; }

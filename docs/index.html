@@ -9,8 +9,8 @@
 <title>VICTOR: comparing cluster sets</title>
 <meta name="description" content="VICTOR is a visual analytics web application for comparing cluster sets. It runs entirely in your browser.">
 <link rel="icon" href="favicon.ico">
-<link rel="stylesheet" href="css/victor.css?v=10">
-<script src="js/theme.js?v=10"></script>
+<link rel="stylesheet" href="css/victor.css?v=13">
+<script src="js/theme.js?v=13"></script>
 </head>
 <body>
 
@@ -109,7 +109,7 @@
         </div>
         <div class="card home-card feature">
           <h3>Check clusterings against a network</h3>
-          <p>Load a network and score how well separated the clusters of each result are on it: conductance, density, modularity and coverage. Answers "which result fits the network best?"</p>
+          <p>Load a network and score how well separated the clusters of each result are on it: conductance, density, modularity and coverage. Answers "which result fits the network best?" The network and clusters can then be opened in NORMA.</p>
           <div class="actions">
             <button class="btn primary" id="homeNetwork" type="button">Open Network quality</button>
             <button class="btn" id="homeNetworkExample" type="button">Try the network example</button>
@@ -383,6 +383,13 @@ cluster3	F06,F11</pre></div>
             <button data-stage="filtered" aria-pressed="false">After filters</button>
           </div>
         </section>
+        <section>
+          <h2>Open in NORMA</h2>
+          <p class="hint">Sends the network and the clusters of every loaded set to <a href="https://normaviz.org" target="_blank" rel="noopener noreferrer">NORMA</a> as annotations. Each node is drawn as a pie chart of the clusters it belongs to, one slice per cluster set. The data goes straight from this page to the NORMA page in your browser; it is not uploaded.</p>
+          <button class="btn norma-btn" id="normaOpen" type="button"><img src="img/norma-icon.svg" alt="" width="28" height="28"><span>Open in <b>NORMA</b></span></button>
+          <button class="btn small" id="normaDownload" type="button">Download the files for NORMA instead</button>
+          <p class="hint" id="normaStatus" role="status"></p>
+        </section>
       </aside>
       <div class="content">
         <div class="notice" id="qualityMessage" role="status"></div>
@@ -562,10 +569,10 @@ N2	N11	0.3</pre>
 
 <footer>VICTOR runs entirely in your browser. Open-source under the AGPL-3.0 licence.</footer>
 
-<script src="lib/d3.v5.min.js?v=10"></script>
-<script src="js/core.js?v=10"></script>
-<script src="js/charts.js?v=10"></script>
-<script src="js/examples.js?v=10"></script>
-<script src="js/app.js?v=10"></script>
+<script src="lib/d3.v5.min.js?v=13"></script>
+<script src="js/core.js?v=13"></script>
+<script src="js/charts.js?v=13"></script>
+<script src="js/examples.js?v=13"></script>
+<script src="js/app.js?v=13"></script>
 </body>
 </html>

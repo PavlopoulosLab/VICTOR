@@ -20,6 +20,7 @@ VICTOR does not run clustering itself and does not pick a "best" result. It runs
 * **Match clusters** between two sets: which cluster of one corresponds best to which cluster of the other, and how many objects they share.
 * **Visualize** any metric as a bar plot, hierarchical heatmap, Sankey plot, network or circos plot, and hide the pairs below a chosen similarity.
 * **Check cluster quality on a network**: conductance, internal density and cut ratio per cluster, plus modularity and coverage for the whole set.
+* **Open in NORMA**: send the network and the clusters of every loaded set to [NORMA](https://normaviz.org) as annotations, with each node drawn as a pie chart of the clusters it belongs to. The data passes directly between the two pages in your browser.
 * **Export** every plot as PNG, SVG, PDF, JPEG or WebP at up to six times the on-screen resolution, and every table as CSV.
 
 The interface has a light and a dark theme and works on phones.
