@@ -11,14 +11,12 @@
   Apply size-based thresholds to focus on clusters of interest.
 
 * **Comparison Metrics**
-  Compare cluster sets using **10 different metrics**:
+  Compare cluster sets using **27 different metrics** in four families:
 
-  * Adjusted Rand Index (ARI)
-  * Normalized Mutual Information (NMI)
-  * Fowlkes–Mallows Index (FMI)
-  * Jaccard Index
-  * Variation of Information (VI)
-  * ... *and more.*
+  * Counting pairs: Adjusted Rand Index, Rand Index, Fowlkes–Mallows Index, Jaccard Index, Overlap Coefficient, Wallace Criteria 1 and 2
+  * Set overlaps / matching: Maximum-Match, Optimal-Match Accuracy (Hungarian), F-Measure, Purity (Meila–Heckerman), Van Dongen (normalized), B-Cubed Precision, Recall and F-Score, Element-Centric Similarity
+  * Mutual information: three Normalized Mutual Information variants, Adjusted Mutual Information, Normalized Variation of Information, Variation of Information (normalized by log n and by joint entropy), Homogeneity, Completeness
+  * Overlapping clusterings: Omega Index, Overlapping NMI
 
 * **Interactive Visualizations**
 
@@ -32,28 +30,34 @@
   Filter cluster comparisons by setting thresholds on any of the computed metrics.
 
 * **Network Representation**
-  Calculate and visualize how clusters map onto a given network.
+  Calculate how well clusters are separated on a given network: conductance, internal density and cut ratio per cluster, plus modularity and coverage.
 
 * **Export Options**
-  Generate and download publication-ready figures in high-resolution formats.
+  Download every plot as SVG or PNG and every table as CSV.
 
 ## Installation & Usage
 
+VICTOR is a static web application. All calculations run in the browser, so there is nothing to install and no data leaves your computer.
+
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/victor.git
+git clone https://github.com/PavlopoulosLab/VICTOR.git
 
-# Navigate to the project directory
-cd victor
-
-# Install dependencies
-npm install  # or pip install -r requirements.txt
-
-# Start the application
-npm start    # or python app.py
+# Serve the docs folder with any static web server, for example
+cd VICTOR/docs
+python3 -m http.server 8000
 ```
 
-*Visit the [Demo Page](https://your-demo-url.com) for an interactive walkthrough.*
+Then open http://localhost:8000. The `docs/` folder can also be published as it is with GitHub Pages (Settings → Pages → deploy from the `/docs` folder of the main branch).
+
+* `docs/js/core.js`: parsing, filters, the 27 metrics, cluster matching and network quality measures (no dependencies)
+* `docs/js/charts.js`: plots, drawn with the bundled d3 v5
+* `docs/js/app.js`: user interface
+* `docs/test/test.html`: self-checks of the calculations; open it in a browser to run them
+
+### Previous R/Shiny version
+
+The original R/Shiny application described in the publication is still in the repository root (`ui.R`, `server.R`, `global.R`, `metrics.R`, `www/`). It needs R with the packages shiny, shinyjs, shinythemes, shinyWidgets, mclustcomp, igraph, d3heatmap, RColorBrewer, stringr, DT and visNetwork, and is started with `shiny::runApp()`.
 
 ## Publication
 

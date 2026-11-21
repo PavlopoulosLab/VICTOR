@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VICTOR core tests</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; }
+  .pass { color: #006300; } .fail { color: #d03b3b; font-weight: 600; }
+  pre { margin: 0; }
+</style>
+</head>
+<body>
+<h1>VICTOR core tests</h1>
+<p id="summary">Running...</p>
+<div id="log"></div>
+<script src="../js/core.js"></script>
+<script>
+(function () {
+  "use strict";
+  var C = VICTOR.core, results = [], log = document.getElementById("log");
+  function check(name, cond, detail) {
+    results.push({ name: name, pass: !!cond, detail: detail || "" });
+    var p = document.createElement("pre");
+    p.className = cond ? "pass" : "fail";
+    p.textContent = (cond ? "PASS  " : "FAIL  ") + name + (detail ? "   [" + detail + "]" : "");
+    log.appendChild(p);
+  }
+  function close(x, y, tol) { return Math.abs(x - y) < (tol || 1e-4); }
+  // label vectors -> cluster sets with objects o0..o(n-1)
+  function fromLabels(labels, prefix) {
+    var groups = {};
+    labels.forEach(function (l, i) { (groups[l] = groups[l] || []).push("o" + i); });
+    return Object.keys(groups).map(function (k) { return { name: (prefix || "c") + k, members: groups[k] }; });
+  }
+  var ALL = C.METRICS.filter(function (m) { return !m.cover; }).map(function (m) { return m.code; });
+  var COVER = C.METRICS.filter(function (m) { return m.cover; }).map(function (m) { return m.code; });
+  function metrics(x, y) { return C.computeMetrics(C.confusion(fromLabels(x), fromLabels(y)), ALL); }
+  var seed = 12345;
+  function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+
+  // 1. reference values (scikit-learn user guide example)
+  var m = metrics([0, 0, 0, 1, 1, 1], [0, 0, 1, 1, 2, 2]);
+  check("ARI = 0.2424", close(m.adjrand, 0.2424), m.adjrand);
+  check("Rand = 0.6667", close(m.rand, 0.6667), m.rand);
+  check("FMI = 0.4714", close(m.fmi, 0.4714), m.fmi);
+  check("AMI = 0.2987", close(m.ami, 0.2987, 2e-4), m.ami);
+  check("homogeneity = 0.6667", close(m.homogeneity, 0.6667), m.homogeneity);
+  check("completeness = 0.4206", close(m.completeness, 0.4206), m.completeness);
+  check("NMI arithmetic = 0.5158", close(m.nmi2, 0.5158), m.nmi2);
+  check("V-measure (harmonic mean of homogeneity, completeness) equals nmi2",
+    close(2 * m.homogeneity * m.completeness / (m.homogeneity + m.completeness), m.nmi2, 1e-12));
+  check("B-cubed P = 0.8333, R = 0.5556, F = 0.6667", close(m.bcubed_p, 0.8333) && close(m.bcubed_r, 0.5556) && close(m.bcubed_f, 0.6667));
+  check("Van Dongen normalized = 0.75", close(m.vdm_norm, 0.75), m.vdm_norm);
+  check("Jaccard = 2/7 (2 pairs together in both, 6 in A, 3 in B)", close(m.jaccard, 2 / 7), m.jaccard);
+  check("Wallace 1 = 2/6, Wallace 2 = 2/3, Overlap = 2/3", close(m.wallace1, 2 / 6) && close(m.wallace2, 2 / 3) && close(m.overlap, 2 / 3));
+  check("Maximum-Match = 4/6, Meila-Heckerman = 4/6", close(m.mmm, 4 / 6) && close(m.mhm, 4 / 6), m.mmm + " " + m.mhm);
+  // F-measure by hand: clusters of A sizes 3,3; best F for A0 vs B0 = 2*2/(3+2)=0.8, A1 vs B2 = 0.8 -> 0.8
+  check("F-Measure = 0.8", close(m.f, 0.8), m.f);
+
+  // 2. identical up to relabelling: every metric is 1
+  m = metrics([0, 0, 1, 1, 2, 2, 2], [5, 5, 9, 9, 7, 7, 7]);
+  check("relabelled identical sets give 1 for all partition metrics", ALL.every(function (c) { return close(m[c], 1, 1e-9); }),
+    ALL.filter(function (c) { return !close(m[c], 1, 1e-9); }).join(","));
+
+  // 3. refinement: B splits every cluster of A
+  m = metrics([0, 0, 0, 0, 1, 1, 1, 1], [0, 0, 1, 1, 2, 2, 3, 3]);
+  check("refinement: homogeneity 1, completeness < 1, B-cubed P 1, R 0.5, Wallace 2 = 1",
+    close(m.homogeneity, 1) && m.completeness < 0.99 && close(m.bcubed_p, 1) && close(m.bcubed_r, 0.5) && close(m.wallace2, 1));
+
+  // 4. degenerate cases stay finite
+  m = metrics([0, 0, 0, 0], [0, 1, 2, 3]);
+  check("one cluster vs all singletons: every value finite, AMI = 0, ARI = 0",
+    ALL.every(function (c) { return isFinite(m[c]); }) && close(m.ami, 0) && close(m.adjrand, 0));
+  m = metrics([0, 1, 2, 3], [0, 1, 2, 3]);
+  check("all singletons vs all singletons: every metric is 1", ALL.every(function (c) { return close(m[c], 1, 1e-9); }),
+    ALL.filter(function (c) { return !close(m[c], 1, 1e-9); }).join(","));
+
+  // 5. random data against brute-force definitions
+  var n = 240, x = [], y = [], i, j;
+  for (i = 0; i < n; i++) { x.push(Math.floor(rnd() * 6)); y.push(Math.floor(rnd() * 9)); }
+  m = metrics(x, y);
+  var n11 = 0, n10 = 0, n01 = 0, n00 = 0;
+  for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) {
+    var sx = x[i] === x[j], sy = y[i] === y[j];
+    if (sx && sy) n11++; else if (sx) n10++; else if (sy) n01++; else n00++;
+  }
+  check("pair counting: Rand, Jaccard, FMI, Wallace, Overlap match O(n^2) brute force",
+    close(m.rand, (n11 + n00) / (n11 + n10 + n01 + n00), 1e-12) && close(m.jaccard, n11 / (n11 + n10 + n01), 1e-12) &&
+    close(m.fmi, n11 / Math.sqrt((n11 + n10) * (n11 + n01)), 1e-12) && close(m.wallace1, n11 / (n11 + n10), 1e-12) &&
+    close(m.wallace2, n11 / (n11 + n01), 1e-12) && close(m.overlap, n11 / Math.min(n11 + n10, n11 + n01), 1e-12));
+  var bp = 0, br = 0;
+  for (i = 0; i < n; i++) {
+    var both = 0, inY = 0, inX = 0;
+    for (j = 0; j < n; j++) { if (y[j] === y[i]) inY++; if (x[j] === x[i]) inX++; if (y[j] === y[i] && x[j] === x[i]) both++; }
+    bp += both / inY; br += both / inX;
+  }
+  check("B-cubed matches per-object brute force", close(m.bcubed_p, bp / n, 1e-12) && close(m.bcubed_r, br / n, 1e-12));
+  check("random labels: |AMI| < 0.04, |ARI| < 0.04", Math.abs(m.ami) < 0.04 && Math.abs(m.adjrand) < 0.04, m.ami + " " + m.adjrand);
+  check("all partition metric values within [-0.05, 1]", ALL.every(function (c) { return m[c] > -0.05 && m[c] <= 1 + 1e-9; }));
+  // symmetry
+  var m2 = metrics(y, x);
+  check("symmetric metrics are symmetric; asymmetric pairs swap",
+    C.METRICS.filter(function (d) { return d.symmetric && !d.cover; }).every(function (d) { return close(m[d.code], m2[d.code], 1e-12); }) &&
+    close(m.wallace1, m2.wallace2, 1e-12) && close(m.homogeneity, m2.completeness, 1e-12) && close(m.bcubed_p, m2.bcubed_r, 1e-12),
+    C.METRICS.filter(function (d) { return d.symmetric && !d.cover && !close(m[d.code], m2[d.code], 1e-12); }).map(function (d) { return d.code; }).join(","));
+  // expected mutual information against a permutation average
+  var conf = C.confusion(fromLabels(x), fromLabels(y)), emi = C.expectedMutualInformation(conf.a, conf.b, n), sum = 0, R = 300, yy = y.slice();
+  for (var r = 0; r < R; r++) {
+    for (i = n - 1; i > 0; i--) { j = Math.floor(rnd() * (i + 1)); var t = yy[i]; yy[i] = yy[j]; yy[j] = t; }
+    var cc = C.confusion(fromLabels(x), fromLabels(yy)), I = 0;
+    cc.cells.forEach(function (c) { I += c.m / n * Math.log(c.m * n / (cc.a[c.i] * cc.b[c.j])); });
+    sum += I;
+  }
+  check("expected mutual information matches the mean over 300 random permutations", Math.abs(emi - sum / R) < 0.004, emi + " vs " + sum / R);
+
+  // 5b. optimal matching, element-centric similarity, joint-entropy VI
+  check("catalogue: 25 partition metrics and 2 cover metrics", ALL.length === 25 && COVER.length === 2, ALL.length + " " + COVER.length);
+  var gx = [], gy = [];
+  for (i = 0; i < 13; i++) { gx.push(i < 9 ? 0 : 1); gy.push(i < 5 ? 0 : i < 9 ? 1 : 0); } // confusion [[5,4],[4,0]]
+  var gm = metrics(gx, gy);
+  check("greedy match 5/13 but optimal match 8/13", close(gm.mmm, 5 / 13, 1e-12) && close(gm.match_opt, 8 / 13, 1e-12), gm.mmm + " " + gm.match_opt);
+  var okOpt = true, worst = "";
+  for (var trial = 0; trial < 40; trial++) {
+    var tx = [], ty = [], tn = 50, KK = 4 + Math.floor(rnd() * 3), LL = 4 + Math.floor(rnd() * 4);
+    for (i = 0; i < tn; i++) { tx.push(Math.floor(rnd() * KK)); ty.push(Math.floor(rnd() * LL)); }
+    var tc = C.confusion(fromLabels(tx), fromLabels(ty)), dense = tc.a.map(function () { return tc.b.map(function () { return 0; }); });
+    tc.cells.forEach(function (c) { dense[c.i][c.j] = c.m; });
+    var bestSum = 0;
+    (function assign(row, usedCols, acc) { // every one-to-one matching, rows may stay unmatched
+      if (row === dense.length) { if (acc > bestSum) bestSum = acc; return; }
+      assign(row + 1, usedCols, acc);
+      for (var col = 0; col < dense[0].length; col++) if (!usedCols[col]) { usedCols[col] = true; assign(row + 1, usedCols, acc + dense[row][col]); usedCols[col] = false; }
+    })(0, {}, 0);
+    var got = C.computeMetrics(tc, ["match_opt", "mmm"]);
+    if (!close(got.match_opt, bestSum / tn, 1e-12) || got.mmm > got.match_opt + 1e-12) { okOpt = false; worst = got.match_opt + " vs " + bestSum / tn; }
+  }
+  check("optimal match equals exhaustive search on 40 random cases and is never below the greedy match", okOpt, worst);
+  // element-centric similarity straight from its definition (personalized PageRank affinities, alpha = 0.9)
+  var alpha = 0.9, ecsSum = 0, sizeX = {}, sizeY = {};
+  x.forEach(function (l) { sizeX[l] = (sizeX[l] || 0) + 1; });
+  y.forEach(function (l) { sizeY[l] = (sizeY[l] || 0) + 1; });
+  for (i = 0; i < n; i++) {
+    var l1 = 0;
+    for (j = 0; j < n; j++) {
+      var pa = (x[i] === x[j] ? alpha / sizeX[x[i]] : 0) + (i === j ? 1 - alpha : 0);
+      var pb = (y[i] === y[j] ? alpha / sizeY[y[i]] : 0) + (i === j ? 1 - alpha : 0);
+      l1 += Math.abs(pa - pb);
+    }
+    ecsSum += 1 - l1 / (2 * alpha);
+  }
+  check("element-centric similarity matches its definition and never exceeds B-cubed precision or recall",
+    close(m.ecs, ecsSum / n, 1e-9) && m.ecs <= Math.min(m.bcubed_p, m.bcubed_r) + 1e-12, m.ecs + " vs " + ecsSum / n);
+  var ref = metrics([0, 0, 0, 1, 1, 1], [0, 0, 1, 1, 2, 2]); // H(A)=ln2, H(B)=ln3, I=0.4621 -> VI=0.8676, H(A,B)=1.3297
+  check("VI by joint entropy = 1 - 0.8676/1.3297 = 0.3475", close(ref.vi_joint, 0.3475, 2e-4), ref.vi_joint);
+
+  // 5c. overlapping clusterings
+  var px = fromLabels(x), py = fromLabels(y), cov = C.coverMetrics(px, py, COVER), cov2 = C.coverMetrics(py, px, COVER);
+  check("Omega Index equals the Adjusted Rand Index on strict partitions", close(cov.omega, m.adjrand, 1e-9), cov.omega + " vs " + m.adjrand);
+  check("cover metrics are symmetric and bounded", close(cov.omega, cov2.omega, 1e-12) && close(cov.onmi, cov2.onmi, 1e-12) && cov.onmi >= 0 && cov.onmi <= 1, JSON.stringify(cov));
+  check("random partitions: overlapping NMI near 0", cov.onmi < 0.05, cov.onmi);
+  var ov1 = C.parseClusterFile("c1\ta,b,c,d\nc2\td,e,f,g\nc3\tg,h,i,a").clusters, ov2 = C.parseClusterFile("k1\ta,b,c,d\nk2\td,e,f,g\nk3\tg,h,i,a").clusters,
+      ov3 = C.parseClusterFile("z1\ta,b,c\nz2\tc,d,e,f\nz3\tg,h,i,a,e").clusters;
+  var same = C.coverMetrics(ov1, ov2, COVER), diff = C.coverMetrics(ov1, ov3, COVER);
+  check("identical overlapping clusterings give Omega 1 and overlapping NMI 1", close(same.omega, 1, 1e-12) && close(same.onmi, 1, 1e-12), JSON.stringify(same));
+  check("different overlapping clusterings give values below 1", diff.omega < 0.99 && diff.onmi < 0.99 && diff.onmi >= 0, JSON.stringify(diff));
+  // Omega by hand on 4 objects: A = {1,2,3},{3,4}; B = {1,2},{3,4}. Pairs sharing a cluster: A {12,13,23,34}, B {12,34}.
+  // Agree on 12, 34 (1 cluster each) and 14, 24 (none): observed 4/6. Expected (2*4 + 4*2)/36 = 16/36. Omega = (4/6-16/36)/(1-16/36) = 0.4
+  var hand = C.coverMetrics(C.parseClusterFile("a\t1,2,3\nb\t3,4").clusters, C.parseClusterFile("a\t1,2\nb\t3,4").clusters, ["omega"]);
+  check("Omega Index hand-worked example = 0.4", close(hand.omega, 0.4, 1e-12), hand.omega);
+  var sets3 = [{ name: "o1", clusters: ov1 }, { name: "o3", clusters: ov3 }], onlyCover = C.compareAll(sets3, ["adjrand", "omega", "onmi"]), refused = "";
+  try { C.compareAll(sets3, ["adjrand"]); } catch (e) { refused = e.message; }
+  check("compareAll: overlapping sets get only the cover metrics, with a note; refused when none is selected",
+    onlyCover.codes.join() === "omega,onmi" && onlyCover.note.length > 0 && refused.indexOf("Omega Index") > 0, onlyCover.codes.join() + " | " + refused);
+
+  // 5d. one calculation per pair; metrics that are too large are skipped, not fatal
+  var both = C.compareAll([{ name: "X", clusters: px }, { name: "Y", clusters: py }], ALL.concat(COVER)), direct = metrics(y, x);
+  check("compareAll: the derived reverse direction equals a direct calculation for every partition metric",
+    ALL.every(function (c) { return close(both.matrix[c][1][0], direct[c], 1e-12) && close(both.matrix[c][0][1], m[c], 1e-12); }) && both.skipped.length === 0,
+    ALL.filter(function (c) { return !close(both.matrix[c][1][0], direct[c], 1e-12); }).join(","));
+  var manyA = [], manyB = [], big = [];
+  for (i = 0; i < 2100; i++) { manyA.push({ name: "a" + i, members: ["o" + i] }); manyB.push({ name: "b" + i, members: ["o" + i] }); big.push("o" + i); }
+  var partial = C.compareAll([{ name: "A", clusters: manyA }, { name: "B", clusters: manyB }], ["adjrand", "match_opt", "nmi2"]);
+  check("2100 x 2100 clusters: Optimal-Match is skipped with a reason, the other metrics are returned",
+    partial.codes.join() === "adjrand,nmi2" && partial.skipped.length === 1 && partial.skipped[0].code === "match_opt" &&
+    partial.matrix.match_opt === undefined && close(partial.matrix.adjrand[0][1], 1), JSON.stringify(partial.skipped));
+  var bigCluster = []; for (i = 0; i < 3600; i++) bigCluster.push("o" + i);
+  var huge = C.compareAll([{ name: "A", clusters: [{ name: "all", members: bigCluster }] }, { name: "B", clusters: [{ name: "all", members: bigCluster }] }], ["omega", "rand"]);
+  check("a cluster of 3600 objects (6.5 million pairs): Omega is skipped, Rand is returned",
+    huge.codes.join() === "rand" && huge.skipped[0].code === "omega", JSON.stringify(huge.skipped));
+  check("estimateSeconds: 2 sets of 500,000 objects is about half a second, 20 such sets about 95 seconds",
+    close(C.estimateSeconds(2, 500000), 0.5, 1e-9) && close(C.estimateSeconds(20, 500000), 95, 1e-9));
+
+  // 6. parsing and filters
+  var p = C.parseClusterFile("c1\tA,B, C\r\nc2\tD,E\r\n\r\nc2\tF\nnameWithoutMembers\n");
+  check("parser: CRLF, spaces, duplicate cluster name, bad line",
+    p.clusters.length === 3 && p.clusters[0].members.join("") === "ABC" && p.clusters[2].name === "c2_2" && p.warnings.length === 2, JSON.stringify(p.warnings));
+  var A = C.parseClusterFile("1\tA,B\n2\tC,D\n3\tE,H").clusters, B = C.parseClusterFile("1\tA,B,C\n2\tE,F\n3\tG,H").clusters,
+      D = C.parseClusterFile("1\tA,B,C\n2\tE,G,H").clusters;
+  var inter = C.intersectionFilter([A, B, D]), sup = C.supersetFilter([A, B, D]);
+  check("intersection filter (paper Fig. 1B): 5 common objects, cluster counts 3, 3, 2",
+    inter.map(C.countObjects).join() === "5,5,5" && inter.map(function (s) { return s.length; }).join() === "3,3,2");
+  check("superset filter (paper Fig. 1C): 8 objects each, cluster counts 5, 4, 4",
+    sup.map(C.countObjects).join() === "8,8,8" && sup.map(function (s) { return s.length; }).join() === "5,4,4",
+    sup.map(function (s) { return s.length; }).join());
+  check("size filter", C.filterBySize(B, 3, 3).length === 1);
+  check("compareAll on partitions returns all 27 metrics and no note",
+    C.compareAll(inter.map(function (c, k) { return { name: "S" + k, clusters: c }; }), ALL.concat(COVER)).codes.length === 27);
+  check("overlapping objects detected", C.overlappingObjects(C.parseClusterFile("1\tA,B\n2\tB,C").clusters).join() === "B");
+  var threw = "";
+  try { C.compareAll([{ name: "A", clusters: A }, { name: "B", clusters: B }], ["adjrand"]); } catch (e) { threw = e.message; }
+  check("compareAll explains mismatching object sets", threw.indexOf("do not contain the same objects") > 0, threw);
+  var all = C.compareAll(inter.map(function (c, k) { return { name: "S" + k, clusters: c }; }), ["adjrand", "wallace1"]);
+  check("compareAll: n x n matrix, diagonal 1, Wallace 1 of (i,j) = Wallace 2 view of (j,i)",
+    all.matrix.adjrand.length === 3 && all.matrix.adjrand[1][1] === 1 && close(all.matrix.adjrand[0][2], all.matrix.adjrand[2][0], 1e-12));
+  var mm = C.maximumMatch(inter[0], inter[1]);
+  // {A,B},{C},{E,H} vs {A,B,C},{E},{H}: cluster {C} only overlaps the already matched {A,B,C}, so it stays unmatched
+  check("maximum match lists the best cluster pairs", mm.length === 2 && mm[0].overlap === 2 && mm[0].a === "1" && mm[0].b === "1", JSON.stringify(mm));
+
+  // names that collide with built-in object properties must behave like any other name
+  var odd = C.parseClusterFile("constructor\ttoString,__proto__,valueOf\n__proto__\thasOwnProperty,constructor\n").clusters;
+  check("names like __proto__, constructor, toString are kept as plain data",
+    odd.length === 2 && odd[0].name === "constructor" && odd[1].name === "__proto__" && odd[0].members.join() === "toString,__proto__,valueOf" &&
+    C.countObjects(odd) === 5 && C.overlappingObjects(odd).length === 0 && ({}).polluted === undefined, JSON.stringify(odd));
+  var oddNet = C.parseEdgeList("__proto__ constructor\nconstructor toString\n__proto__ constructor\n");
+  check("edge list with __proto__ / constructor node names", oddNet.nodes.length === 3 && oddNet.edges.length === 2 && oddNet.duplicates === 1, JSON.stringify(oddNet.nodes));
+  var oddQ = C.clusterQuality(oddNet, odd);
+  check("comparison and quality run on those names", isFinite(C.computeMetrics(C.confusion(odd, odd), ALL).adjrand) && oddQ.rows.length === 2);
+
+  // 7. hierarchical clustering
+  var h = C.hclust([[0, 1, 9, 9], [1, 0, 9, 9], [9, 9, 0, 2], [9, 9, 2, 0]]);
+  check("hclust: {0,1} and {2,3} merge first, root height 9", close(h.root.height, 9) && h.order.join() === "0,1,2,3", h.order.join() + " " + h.root.height);
+
+  // 8. network: two triangles joined by one edge
+  var net = C.parseEdgeList("a\tb\nb\tc\na\tc\nd e\ne f\nd f\nc d\nc d\nx x\n");
+  var q = C.clusterQuality(net, [{ name: "C1", members: ["a", "b", "c"] }, { name: "C2", members: ["d", "e", "f", "zz"] }]);
+  check("edge list: duplicate merged (weight 2), self-loop dropped", net.edges.length === 7 && net.duplicates === 1 && net.loops === 1 && net.nodes.length === 7);
+  // bridge weight 2: total weight 8, volume of each triangle 8, cut 2 -> conductance 2/8
+  check("conductance 0.25, internal density 1, missing object counted",
+    close(q.rows[0].conductance, 0.25) && close(q.rows[1].conductance, 0.25) && close(q.rows[0].internalDensity, 1) && q.missingObjects === 1,
+    q.rows[0].conductance + " " + q.missingObjects);
+  check("cut ratio 1/12 (1 cut edge, 3 x 4 possible), coverage 6/8, modularity 0.25",
+    close(q.rows[0].cutRatio, 1 / 12) && close(q.coverage, 0.75) && close(q.modularity, 6 / 8 - 2 * Math.pow(8 / 16, 2)), q.rows[0].cutRatio + " " + q.modularity);
+
+  var failed = results.filter(function (r) { return !r.pass; });
+  document.getElementById("summary").textContent = results.length + " checks, " + failed.length + " failed.";
+  document.getElementById("summary").className = failed.length ? "fail" : "pass";
+  window.__victorTests = { total: results.length, failed: failed };
+})();
+</script>
+</body>
+</html>
