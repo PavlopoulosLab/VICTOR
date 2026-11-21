@@ -414,6 +414,52 @@
     });
   }
 
+  // ---------------------------------------------------------------- metric explanations ("i" buttons)
+  var infoTip = null, infoOwner = null;
+  function hideInfo() {
+    if (infoTip) infoTip.style.display = "none";
+    if (infoOwner) { infoOwner.setAttribute("aria-expanded", "false"); infoOwner = null; }
+  }
+  function showInfo(button, code) {
+    var def = C.metricByCode(code);
+    if (!infoTip) {
+      infoTip = el("div", { class: "tooltip info-tip", role: "tooltip", id: "metricInfoTip" });
+      document.body.appendChild(infoTip);
+    }
+    empty(infoTip);
+    infoTip.appendChild(el("b", null, def.label));
+    infoTip.appendChild(document.createTextNode(METRIC_HINTS[code] || ""));
+    if (!def.symmetric) infoTip.appendChild(el("div", null, "Asymmetric: in \"A vs B\", A is the first set."));
+    if (def.cover) infoTip.appendChild(el("div", null, "Also works when an object is in several clusters."));
+    infoTip.style.display = "block";
+    var rect = button.getBoundingClientRect(), w = infoTip.offsetWidth, h = infoTip.offsetHeight;
+    var left = Math.max(8, Math.min(rect.left + rect.width / 2 - w / 2, global.innerWidth - w - 8));
+    var top = rect.bottom + 8;
+    if (top + h > global.innerHeight - 8) top = Math.max(8, rect.top - h - 8);
+    infoTip.style.left = left + "px";
+    infoTip.style.top = top + "px";
+    infoOwner = button;
+    button.setAttribute("aria-expanded", "true");
+  }
+  // A small "i" button that explains a metric on hover, keyboard focus or tap.
+  function infoButton(code) {
+    var b = el("button", { class: "info", type: "button", "aria-label": "What is " + C.metricByCode(code).label + "?",
+      "aria-expanded": "false", "aria-describedby": "metricInfoTip" }, "i");
+    b.addEventListener("mouseenter", function () { showInfo(b, code); });
+    b.addEventListener("mouseleave", hideInfo);
+    b.addEventListener("focus", function () { showInfo(b, code); });
+    b.addEventListener("blur", hideInfo);
+    b.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (infoOwner === b && e.detail === 0) hideInfo(); else showInfo(b, code);
+    });
+    return b;
+  }
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideInfo(); });
+  document.addEventListener("click", function (e) { if (infoOwner && e.target !== infoOwner) hideInfo(); });
+  global.addEventListener("scroll", hideInfo, { passive: true, capture: true });
+
   // ---------------------------------------------------------------- rendering: compare
   function renderMetricList() {
     var box = $("metricList"), groups = {};
@@ -432,10 +478,12 @@
           compare();
           render();
         });
-        label.title = METRIC_HINTS[m.code] || "";
         label.appendChild(cb);
         label.appendChild(el("span", null, m.label + (m.symmetric ? "" : " *")));
-        wrap.appendChild(label);
+        var row = el("div", { class: "metric-row" });
+        row.appendChild(label);
+        row.appendChild(infoButton(m.code));
+        wrap.appendChild(row);
       });
       box.appendChild(wrap);
     });
@@ -494,7 +542,8 @@
       hr.appendChild(el("th", null, "Metric"));
       pairs.forEach(function (p) { hr.appendChild(el("th", { class: "num" }, pairName(p))); });
       r.codes.forEach(function (code) {
-        var def = C.metricByCode(code), tr = el("tr"), head = el("td", { title: METRIC_HINTS[code] || "" }, def.label + (def.symmetric ? "" : " *"));
+        var def = C.metricByCode(code), tr = el("tr"), head = el("td", null, def.label + (def.symmetric ? "" : " *"));
+        head.appendChild(infoButton(code));
         tr.appendChild(head);
         cellsOf[code].forEach(function (make) { tr.appendChild(make()); });
         tbody.appendChild(tr);
@@ -503,7 +552,9 @@
       hr.appendChild(el("th", null, "Pair"));
       r.codes.forEach(function (code) {
         var def = C.metricByCode(code);
-        hr.appendChild(el("th", { class: "num metric-head", title: METRIC_HINTS[code] || "" }, def.label + (def.symmetric ? "" : " *")));
+        var th = el("th", { class: "num metric-head" }, def.label + (def.symmetric ? "" : " *"));
+        th.appendChild(infoButton(code));
+        hr.appendChild(th);
       });
       pairs.forEach(function (p, k) {
         var tr = el("tr");
@@ -584,6 +635,8 @@
     $("netLayoutField").hidden = v.kind !== "network";
     $("netLayout").value = v.layout;
 
+    empty($("vizMetricInfo"));
+    $("vizMetricInfo").appendChild(infoButton(v.metric));
     var def = C.metricByCode(v.metric), shown = pairs.filter(function (p) { return p.value >= v.threshold - 1e-9; });
     $("vizTitle").textContent = VIZ_TITLES[v.kind] + ": " + def.label;
     $("vizNote").textContent = VIZ_NOTES[v.kind] + " Showing " + shown.length + " of " + pairs.length + " pairs." +
@@ -714,8 +767,9 @@
   }
 
   // ---------------------------------------------------------------- tabs and top-level render
-  var currentTab = "files";
+  var currentTab = "home";
   function showTab(tab) {
+    hideInfo();
     currentTab = tab;
     Array.prototype.forEach.call($("tabs").querySelectorAll("button"), function (b) {
       b.setAttribute("aria-selected", b.getAttribute("data-tab") === tab ? "true" : "false");
@@ -981,6 +1035,10 @@
       sortedQualityRows().forEach(function (r) { rows.push(QUALITY_COLUMNS.map(function (c) { return r[c.key] === null ? "" : r[c.key]; })); });
       downloadCsv(rows, "victor_cluster_quality.csv");
     });
+
+    $("homeStart").addEventListener("click", function () { showTab("files"); });
+    $("homeHelp").addEventListener("click", function () { showTab("help"); });
+    $("homeExample").addEventListener("click", function () { loadExample(EXAMPLES[0].files, EXAMPLES[0]); showTab("files"); });
 
     var resizeTimer = null;
     global.addEventListener("resize", function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });

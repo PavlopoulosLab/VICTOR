@@ -9,8 +9,8 @@
 <title>VICTOR: comparing cluster sets</title>
 <meta name="description" content="VICTOR is a visual analytics web application for comparing cluster sets. It runs entirely in your browser.">
 <link rel="icon" href="favicon.ico">
-<link rel="stylesheet" href="css/victor.css?v=7">
-<script src="js/theme.js?v=7"></script>
+<link rel="stylesheet" href="css/victor.css?v=8">
+<script src="js/theme.js?v=8"></script>
 </head>
 <body>
 
@@ -77,7 +77,8 @@
   <button class="btn small" id="themeToggle" type="button" aria-pressed="false">Dark theme</button>
 </header>
 <nav class="tabs" id="tabs" role="tablist" aria-label="Steps">
-  <button role="tab" data-tab="files" aria-selected="true"><span class="step">1</span>Load &amp; prepare <span class="count" id="countSets">0</span></button>
+  <button role="tab" data-tab="home" aria-selected="true">Home</button>
+  <button role="tab" data-tab="files" aria-selected="false"><span class="step">1</span>Load &amp; prepare <span class="count" id="countSets">0</span></button>
   <button role="tab" data-tab="compare" aria-selected="false"><span class="step">2</span>Compare</button>
   <button role="tab" data-tab="visualize" aria-selected="false"><span class="step">3</span>Plots</button>
   <button role="tab" data-tab="quality" aria-selected="false">Network quality</button>
@@ -87,7 +88,45 @@
 <main>
 
   <!-- ============================================================ FILES -->
-  <section class="tab active" id="tab-files" role="tabpanel">
+  <!-- ============================================================ HOME -->
+  <section class="tab active" id="tab-home" role="tabpanel">
+    <div class="home">
+      <div class="hero">
+        <h2>How similar are your clusterings?</h2>
+        <p>VICTOR compares the results of different clustering algorithms, or of one algorithm with different settings, on the same objects. It scores every pair of results and shows the scores as tables and plots.</p>
+        <div class="actions">
+          <button class="btn primary" id="homeStart" type="button">Load your cluster sets</button>
+          <button class="btn" id="homeExample" type="button">Try an example</button>
+        </div>
+        <p class="hint">Everything runs in your browser. Your files are never uploaded.</p>
+      </div>
+
+      <h3 class="home-heading">How it works</h3>
+      <div class="home-grid three">
+        <div class="card home-card"><span class="step">1</span><h3>Load &amp; prepare</h3><p>Load one file per clustering result. If the files do not contain the same objects, VICTOR tells you and offers the fix with one click.</p></div>
+        <div class="card home-card"><span class="step">2</span><h3>Compare</h3><p>Choose from 27 similarity metrics, each with a short explanation, and read the scores for every pair of results.</p></div>
+        <div class="card home-card"><span class="step">3</span><h3>Plots</h3><p>See the same scores as a bar plot, heatmap, Sankey plot, network or circos plot, and save any of them as an image.</p></div>
+      </div>
+
+      <h3 class="home-heading">What you can do</h3>
+      <div class="home-grid">
+        <div class="card home-card"><h3>27 comparison metrics</h3><p>Counting pairs, cluster matching and mutual information, including chance-corrected ones and two for overlapping clusters.</p></div>
+        <div class="card home-card"><h3>See what the sets share</h3><p>An UpSet plot shows which objects each result contains, and cluster matching shows which clusters correspond.</p></div>
+        <div class="card home-card"><h3>Cluster quality on a network</h3><p>Load a network to get conductance, internal density, cut ratio, modularity and coverage for a clustering.</p></div>
+        <div class="card home-card"><h3>Publication-ready export</h3><p>Every plot as PNG, SVG, PDF, JPEG or WebP at high resolution, and every table as CSV.</p></div>
+      </div>
+
+      <h3 class="home-heading">What a cluster set file looks like</h3>
+      <div class="help"><pre>cluster1	F18,F22,F28,F32
+cluster2	F05,F10,F14
+cluster3	F06,F11</pre></div>
+      <p class="hint mt8">One cluster per line: the cluster name, a tab, then its members separated by commas. More in <button class="btn link" id="homeHelp" type="button">Help</button>.</p>
+
+      <p class="hint home-cite">VICTOR does not run clustering and does not pick a best result; it shows where results agree. If you use it, please cite Karatzas et al., <i>Computers in Biology and Medicine</i> 135 (2021) 104557.</p>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-files" role="tabpanel">
     <div class="layout">
       <aside class="panel">
         <section>
@@ -214,7 +253,7 @@
             <button class="btn small" id="metricsAll" type="button">All</button>
             <button class="btn small" id="metricsNone" type="button">None</button>
           </div>
-          <p class="hint">Not sure? "Recommended" picks six that are corrected for chance or easy to read. Point at a metric for a one-line explanation.</p>
+          <p class="hint">Not sure? "Recommended" picks six that are corrected for chance or easy to read. The <span class="info-sample">i</span> next to each metric explains it in one line.</p>
           <div id="metricList"></div>
         </div>
         </details>
@@ -274,7 +313,7 @@
             <button data-kind="network" aria-pressed="false">Network</button>
             <button data-kind="circos" aria-pressed="false">Circos</button>
           </div>
-          <label class="field"><span>Metric</span> <select id="vizMetric"></select></label>
+          <span class="field"><label class="field" for="vizMetric"><span>Metric</span></label> <select id="vizMetric"></select> <span id="vizMetricInfo"></span></span>
           <label class="field"><span>Hide below</span>
             <input type="range" id="vizThreshold" min="0" max="1" step="0.01" value="0">
             <output id="vizThresholdValue" for="vizThreshold">0.00</output>
@@ -489,10 +528,10 @@ N2	N11	0.3</pre>
 
 <footer>VICTOR runs entirely in your browser. Open-source under the AGPL-3.0 licence.</footer>
 
-<script src="lib/d3.v5.min.js?v=7"></script>
-<script src="js/core.js?v=7"></script>
-<script src="js/charts.js?v=7"></script>
-<script src="js/examples.js?v=7"></script>
-<script src="js/app.js?v=7"></script>
+<script src="lib/d3.v5.min.js?v=8"></script>
+<script src="js/core.js?v=8"></script>
+<script src="js/charts.js?v=8"></script>
+<script src="js/examples.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>
