@@ -4,6 +4,9 @@ Patch notes
 -New static web application in docs/ (HTML and JavaScript, no server or R needed). All calculations run in the browser.
 -12 additional comparison metrics (22 in total): Rand, F-Measure, Meila-Heckerman, normalized Van Dongen, B-Cubed precision/recall/F, NMI by larger entropy, Adjusted Mutual Information, normalized Variation of Information, Homogeneity, Completeness.
 -5 further metrics (27 in total): Optimal-Match Accuracy (Hungarian), Element-Centric Similarity, Variation of Information by joint entropy, Omega Index and Overlapping NMI. The last two also compare overlapping clusterings.
+-Export dialog for every plot: PNG, SVG, PDF, JPEG or WebP, up to 6x resolution, theme/white/transparent background.
+-UpSet plot in the Files tab showing which objects the selected cluster sets share, when they differ.
+-Metrics that are too costly for the loaded sets are skipped with a notice; large comparisons ask before running.
 -Light theme by default with a switch to dark; the banner is an SVG that follows the theme.
 -Cluster quality on a network: internal density, cut ratio, modularity and coverage next to conductance.
 

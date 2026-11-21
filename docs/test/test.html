@@ -13,7 +13,7 @@
 <h1>VICTOR core tests</h1>
 <p id="summary">Running...</p>
 <div id="log"></div>
-<script src="../js/core.js"></script>
+<script src="../js/core.js?v=4"></script>
 <script>
 (function () {
   "use strict";
@@ -202,6 +202,9 @@
   check("superset filter (paper Fig. 1C): 8 objects each, cluster counts 5, 4, 4",
     sup.map(C.countObjects).join() === "8,8,8" && sup.map(function (s) { return s.length; }).join() === "5,4,4",
     sup.map(function (s) { return s.length; }).join());
+  var ups = C.objectIntersections([A, B, D]), key = function (c) { return c.members.map(function (m) { return m ? 1 : 0; }).join("") + ":" + c.count; };
+  check("UpSet data (paper Fig. 1): 5 objects in all three sets, D only in set 1, F only in set 2, G in sets 2 and 3",
+    ups.total === 8 && ups.sizes.join() === "6,7,6" && ups.combos.map(key).sort().join() === "011:1,100:1,010:1,111:5".split(",").sort().join(), ups.combos.map(key).join());
   check("size filter", C.filterBySize(B, 3, 3).length === 1);
   check("compareAll on partitions returns all 27 metrics and no note",
     C.compareAll(inter.map(function (c, k) { return { name: "S" + k, clusters: c }; }), ALL.concat(COVER)).codes.length === 27);

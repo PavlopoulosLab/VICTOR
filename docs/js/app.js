@@ -271,6 +271,17 @@
       { name: "After filters", values: chosen.map(function (s) { return C.countObjects(s.filtered); }) }
     ], { label: "Number of objects per cluster set" });
 
+    // UpSet plot of the objects: only useful when the selected sets differ in what they contain
+    var shared = chosen.length >= 2 ? C.objectIntersections(chosen.map(function (s) { return s.raw; })) : null;
+    var differ = !!shared && !(shared.combos.length === 1 && shared.combos[0].degree === chosen.length);
+    $("upsetCard").hidden = !differ;
+    if (differ) {
+      var inAll = shared.combos.filter(function (c) { return c.degree === chosen.length; })[0];
+      $("upsetNote").textContent = (inAll ? inAll.count.toLocaleString() : "0") + " of " + shared.total.toLocaleString() + " objects are in every set, as loaded." +
+        (shared.combos.length > 40 ? " Showing the 40 largest of " + shared.combos.length + " combinations." : "");
+      G.upset($("chartUpset"), names, shared, { label: "UpSet plot of the objects shared between cluster sets", maxColumns: 40 });
+    }
+
     // inspector
     fillSelect($("inspectSet"), state.sets.map(function (s) { return [s.id, s.name]; }), state.inspectId);
     setPressed($("inspectStage"), "stage", state.inspectStage);
@@ -664,6 +675,88 @@
     input.addEventListener("change", function () { if (input.files.length) onFiles(input.files); input.value = ""; });
   }
 
+  // ---------------------------------------------------------------- export dialog
+  var exportTarget = null; // { chartId, title }
+
+  function exportChoice() {
+    var format = document.querySelector('input[name="exportFormat"]:checked').value;
+    return {
+      format: format, scale: +$("exportScale").value, background: $("exportBackground").value,
+      title: $("exportWithTitle").checked ? exportTarget.title : "",
+      filename: ($("exportName").value.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(0, 100)) || "victor_plot"
+    };
+  }
+
+  function syncExportDialog() {
+    var source = G.exportSource($(exportTarget.chartId)), svgRadio = document.querySelector('input[name="exportFormat"][value="svg"]');
+    svgRadio.disabled = !source || source.kind !== "svg"; // the large network is drawn as pixels
+    if (svgRadio.disabled && svgRadio.checked) document.querySelector('input[name="exportFormat"][value="png"]').checked = true;
+    var choice = exportChoice(), format = G.EXPORT_FORMATS[choice.format];
+    $("exportExt").textContent = "." + format.ext;
+    $("exportScale").disabled = !!format.vector;
+    var transparent = $("exportBackground").querySelector('option[value="transparent"]');
+    transparent.disabled = !format.transparent;
+    if (!format.transparent && $("exportBackground").value === "transparent") $("exportBackground").value = "white";
+    $("exportError").textContent = "";
+    if (!source) { $("exportInfo").textContent = "There is no plot to export yet."; $("exportGo").disabled = true; return; }
+    $("exportGo").disabled = false;
+    var w = source.width, h = source.height + (choice.title ? G.TITLE_BAND : 0);
+    var inches = function (px, dpi) { return (px / dpi).toFixed(1); }, cm = function (px, dpi) { return (px / dpi * 2.54).toFixed(1); };
+    if (format.vector) {
+      $("exportInfo").textContent = "Vector image, " + Math.round(w) + " \u00d7 " + Math.round(h) + " units; scales to any size without loss.";
+    } else {
+      var pw = Math.round(w * choice.scale), ph = Math.round(h * choice.scale), dpi = 96 * choice.scale;
+      $("exportInfo").textContent = pw.toLocaleString() + " \u00d7 " + ph.toLocaleString() + " px \u00b7 " + dpi + " dpi when printed at the on-screen size, " +
+        inches(w, 96) + " \u00d7 " + inches(h, 96) + " in (" + cm(w, 96) + " \u00d7 " + cm(h, 96) + " cm) \u00b7 " +
+        inches(pw, 300) + " \u00d7 " + inches(ph, 300) + " in (" + cm(pw, 300) + " \u00d7 " + cm(ph, 300) + " cm) at 300 dpi" +
+        (source.kind === "canvas" ? " \u00b7 this plot is drawn as pixels, so it does not get sharper above the screen's own resolution" : "") +
+        (choice.format === "pdf" ? " \u00b7 the PDF holds the plot as an image" : "");
+    }
+  }
+
+  function openExportDialog(button) {
+    var chartId = button.getAttribute("data-chart");
+    if (chartId === "vizChart") {
+      exportTarget = { chartId: chartId, title: $("vizTitle").textContent };
+      $("exportName").value = "victor_" + state.viz.kind + "_" + state.viz.metric;
+    } else {
+      exportTarget = { chartId: chartId, title: button.getAttribute("data-title") };
+      $("exportName").value = button.getAttribute("data-name");
+    }
+    syncExportDialog();
+    $("exportDialog").showModal();
+  }
+
+  function runExport() {
+    var choice = exportChoice(), dialog = $("exportDialog"), go = $("exportGo");
+    var dark = document.documentElement.getAttribute("data-theme") === "dark";
+    // A white background needs the light colours: in the dark theme the plot is redrawn light for the export.
+    var relight = dark && choice.background === "white";
+    function finish(error) {
+      if (relight) { document.documentElement.setAttribute("data-theme", "dark"); render(); }
+      go.disabled = false;
+      go.textContent = "Download";
+      if (error) $("exportError").textContent = error; else dialog.close();
+    }
+    go.disabled = true;
+    go.textContent = "Preparing\u2026";
+    if (!relight) { G.exportImage($(exportTarget.chartId), choice, finish); return; }
+    document.documentElement.setAttribute("data-theme", "light");
+    render();
+    var animated = exportTarget.chartId === "chartGraph" || (exportTarget.chartId === "vizChart" && state.viz.kind === "network" && state.viz.layout === "force");
+    setTimeout(function () { G.exportImage($(exportTarget.chartId), choice, finish); }, animated ? 2500 : 60); // moving layouts get time to settle
+  }
+
+  function initExportDialog() {
+    Array.prototype.forEach.call(document.querySelectorAll(".export-btn"), function (b) {
+      b.addEventListener("click", function () { openExportDialog(b); });
+    });
+    ["exportScale", "exportBackground", "exportWithTitle"].forEach(function (id) { $(id).addEventListener("change", syncExportDialog); });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="exportFormat"]'), function (r) { r.addEventListener("change", syncExportDialog); });
+    $("exportCancel").addEventListener("click", function () { $("exportDialog").close(); });
+    $("exportGo").addEventListener("click", runExport);
+  }
+
   // ---------------------------------------------------------------- events
   function init() {
     Array.prototype.forEach.call($("tabs").querySelectorAll("button"), function (b) {
@@ -729,9 +822,7 @@
     $("vizMetric").addEventListener("change", function () { state.viz.metric = this.value; state.viz.threshold = null; render(); });
     $("vizThreshold").addEventListener("input", function () { state.viz.threshold = +this.value; render(); });
     $("netLayout").addEventListener("change", function () { state.viz.layout = this.value; render(); });
-    function exportName(ext) { return "victor_" + state.viz.kind + "_" + state.viz.metric + "." + ext; }
-    $("downloadSvg").addEventListener("click", function () { G.exportSvg($("vizChart"), exportName("svg")); });
-    $("downloadPng").addEventListener("click", function () { G.exportPng($("vizChart"), exportName("png")); });
+    initExportDialog();
 
     $("qualitySet").addEventListener("change", function () { state.qualityId = +this.value; computeQuality(); render(); });
     $("qualityStage").addEventListener("click", function (e) {

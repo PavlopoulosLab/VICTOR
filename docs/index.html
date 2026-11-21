@@ -9,8 +9,8 @@
 <title>VICTOR: comparing cluster sets</title>
 <meta name="description" content="VICTOR is a visual analytics web application for comparing cluster sets. It runs entirely in your browser.">
 <link rel="icon" href="favicon.ico">
-<link rel="stylesheet" href="css/victor.css">
-<script src="js/theme.js"></script>
+<link rel="stylesheet" href="css/victor.css?v=4">
+<script src="js/theme.js?v=4"></script>
 </head>
 <body>
 
@@ -151,13 +151,23 @@
           </div>
           <div class="grid2">
             <div class="card">
-              <header><h3>Number of clusters</h3><p>Selected sets</p></header>
+              <header><h3>Number of clusters</h3><p>Selected sets</p><button class="btn small export-btn" type="button" data-chart="chartClusters" data-name="victor_clusters" data-title="Number of clusters">Export</button></header>
               <div class="chart" id="chartClusters"></div>
             </div>
             <div class="card">
-              <header><h3>Number of objects</h3><p>Sets must match here to be compared</p></header>
+              <header><h3>Number of objects</h3><p>Sets must match here to be compared</p><button class="btn small export-btn" type="button" data-chart="chartObjects" data-name="victor_objects" data-title="Number of objects">Export</button></header>
               <div class="chart" id="chartObjects"></div>
             </div>
+          </div>
+          <div class="card" id="upsetCard" hidden>
+            <header>
+              <h3>Objects shared between the selected sets</h3>
+              <div class="toolbar">
+                <p id="upsetNote"></p>
+                <button class="btn small export-btn" type="button" data-chart="chartUpset" data-name="victor_shared_objects" data-title="Objects shared between the selected sets">Export</button>
+              </div>
+            </header>
+            <div class="chart" id="chartUpset"></div>
           </div>
           <div class="card">
             <header>
@@ -168,6 +178,7 @@
                   <button data-stage="raw" aria-pressed="false">As loaded</button>
                   <button data-stage="filtered" aria-pressed="true">After filters</button>
                 </div>
+                <button class="btn small export-btn" type="button" data-chart="chartSizes" data-name="victor_cluster_sizes" data-title="Distribution of cluster sizes">Export</button>
               </div>
             </header>
             <div class="chart" id="chartSizes"></div>
@@ -260,8 +271,7 @@
             </select>
           </label>
           <span class="spacer"></span>
-          <button class="btn small" id="downloadSvg">Download SVG</button>
-          <button class="btn small" id="downloadPng">Download PNG</button>
+          <button class="btn small export-btn" type="button" data-chart="vizChart">Export image&hellip;</button>
         </div>
         <div class="card">
           <header><h3 id="vizTitle"></h3><p id="vizNote"></p></header>
@@ -300,12 +310,12 @@
           <div class="tiles" id="qualityTiles"></div>
           <div class="grid2">
             <div class="card">
-              <header><h3>Network coloured by cluster</h3><p>The eight largest clusters are coloured</p></header>
+              <header><h3>Network coloured by cluster</h3><p>The eight largest clusters are coloured</p><button class="btn small export-btn" type="button" data-chart="chartGraph" data-name="victor_network" data-title="Network coloured by cluster">Export</button></header>
               <div class="chart" id="chartGraph"></div>
               <div class="legend" id="graphLegend"></div>
             </div>
             <div class="card">
-              <header><h3>Conductance of the clusters</h3><p>Closer to 0 means better separated</p></header>
+              <header><h3>Conductance of the clusters</h3><p>Closer to 0 means better separated</p><button class="btn small export-btn" type="button" data-chart="chartConductance" data-name="victor_conductance" data-title="Conductance of the clusters">Export</button></header>
               <div class="chart" id="chartConductance"></div>
             </div>
           </div>
@@ -395,8 +405,9 @@ N2	N11	0.3</pre>
           <li><b>Sankey</b>: cluster sets as blocks joined by bands. Band thickness is relative to the other pairs shown, not an absolute scale.</li>
           <li><b>Network</b>: cluster sets as nodes; thicker edges mean more similar sets. Drag nodes to rearrange.</li>
           <li><b>Circos</b>: cluster sets as arcs; ribbons join the pairs, shaded by similarity.</li>
+          <li><b>UpSet</b> (Files tab): appears when the selected sets do not contain the same objects. Each column is a combination of sets, marked by the filled dots; its bar counts the objects found in exactly those sets and no others. The column with every dot filled is what the Intersection filter keeps.</li>
         </ul>
-        <p class="mt8">"Hide below" removes the pairs whose similarity is under the chosen value. Every plot can be saved as SVG or PNG.</p>
+        <p class="mt8">"Hide below" removes the pairs whose similarity is under the chosen value. Every plot has an Export button that saves it as PNG, SVG, PDF, JPEG or WebP at up to six times the on-screen resolution, on a theme-coloured, white or transparent background.</p>
       </div>
       <div>
         <h2>Network quality</h2>
@@ -418,12 +429,54 @@ N2	N11	0.3</pre>
 
 </main>
 
+<dialog id="exportDialog" class="dialog" aria-labelledby="exportHeading">
+  <h2 id="exportHeading">Export image</h2>
+  <p class="hint">Saves the plot as it looks now.</p>
+  <fieldset class="formats">
+    <legend>Format</legend>
+    <label class="format-card"><input type="radio" name="exportFormat" value="png" checked><span><b>PNG</b><small>Sharp image; transparent background possible</small></span></label>
+    <label class="format-card"><input type="radio" name="exportFormat" value="svg"><span><b>SVG</b><small>Vector: sharp at any size, editable in Illustrator or Inkscape</small></span></label>
+    <label class="format-card"><input type="radio" name="exportFormat" value="pdf"><span><b>PDF</b><small>One page for documents and printing</small></span></label>
+    <label class="format-card"><input type="radio" name="exportFormat" value="jpeg"><span><b>JPEG</b><small>Smaller files; no transparency</small></span></label>
+    <label class="format-card"><input type="radio" name="exportFormat" value="webp"><span><b>WebP</b><small>Small, sharp images for the web</small></span></label>
+  </fieldset>
+  <div class="form-row">
+    <label for="exportScale">Resolution</label>
+    <select id="exportScale">
+      <option value="1">1&times; &middot; 96 dpi (screen)</option>
+      <option value="2" selected>2&times; &middot; 192 dpi (high resolution)</option>
+      <option value="3">3&times; &middot; 288 dpi (print)</option>
+      <option value="4">4&times; &middot; 384 dpi (large print)</option>
+      <option value="6">6&times; &middot; 576 dpi (poster)</option>
+    </select>
+  </div>
+  <p class="hint mono" id="exportInfo"></p>
+  <div class="form-row">
+    <label for="exportBackground">Background</label>
+    <select id="exportBackground">
+      <option value="theme">Theme color</option>
+      <option value="white">White</option>
+      <option value="transparent">Transparent</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="exportName">File name</label>
+    <span class="name-field"><input type="text" id="exportName" maxlength="100" autocomplete="off"><span id="exportExt">.png</span></span>
+  </div>
+  <label class="check"><input type="checkbox" id="exportWithTitle" checked> <span>Add the plot title above the image</span></label>
+  <p class="hint status-bad" id="exportError" role="alert"></p>
+  <div class="dialog-actions">
+    <button type="button" class="btn" id="exportCancel">Cancel</button>
+    <button type="button" class="btn primary" id="exportGo">Download</button>
+  </div>
+</dialog>
+
 <footer>VICTOR runs entirely in your browser. Open-source under the AGPL-3.0 licence.</footer>
 
-<script src="lib/d3.v5.min.js"></script>
-<script src="js/core.js"></script>
-<script src="js/charts.js"></script>
-<script src="js/examples.js"></script>
-<script src="js/app.js"></script>
+<script src="lib/d3.v5.min.js?v=4"></script>
+<script src="js/core.js?v=4"></script>
+<script src="js/charts.js?v=4"></script>
+<script src="js/examples.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
 </body>
 </html>

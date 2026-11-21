@@ -201,6 +201,30 @@
     });
   }
 
+  // Exclusive intersections of the objects of several cluster sets, for an UpSet plot.
+  // Returns { sizes: [objects per set], combos: [{ members: [true/false per set], degree, count }] },
+  // where count is the number of objects found in exactly those sets. Largest first.
+  function objectIntersections(listOfClusters) {
+    var sets = listOfClusters.map(objectSet), tally = new Map();
+    sets.forEach(function (set, idx) {
+      set.forEach(function (o) {
+        if (tally.has(o)) return; // already keyed when met in an earlier set
+        var key = "";
+        for (var k = 0; k < sets.length; k++) key += k === idx || sets[k].has(o) ? "1" : "0";
+        tally.set(o, key);
+      });
+    });
+    var counts = new Map();
+    tally.forEach(function (key) { counts.set(key, (counts.get(key) || 0) + 1); });
+    var combos = [];
+    counts.forEach(function (count, key) {
+      var members = key.split("").map(function (c) { return c === "1"; });
+      combos.push({ members: members, degree: members.filter(Boolean).length, count: count });
+    });
+    combos.sort(function (a, b) { return b.count - a.count || b.degree - a.degree; });
+    return { sizes: sets.map(function (s) { return s.size; }), combos: combos, total: tally.size };
+  }
+
   // ---------------------------------------------------------------- confusion matrix
   // Sparse confusion matrix between two cluster sets of the same objects.
   // Returns { n, a: [sizes of A's clusters], b: [...], cells: [{ i, j, m }], namesA, namesB }.
@@ -742,6 +766,7 @@
     filterBySize: filterBySize,
     intersectionFilter: intersectionFilter,
     supersetFilter: supersetFilter,
+    objectIntersections: objectIntersections,
     confusion: confusion,
     computeMetrics: computeMetrics,
     expectedMutualInformation: expectedMutualInformation,

@@ -276,3 +276,35 @@ img, svg, canvas { max-width: none; }
   input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; }
   th.sortable { padding-top: 11px; padding-bottom: 11px; }
 }
+
+/* export dialog */
+.dialog {
+  width: min(600px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 12px; padding: 20px; background: var(--surface); color: var(--text);
+}
+.dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+.dialog h2 { font-size: 19px; margin-bottom: 2px; }
+.dialog > * + * { margin-top: 12px; }
+.formats { border: 0; padding: 0; margin-left: 0; margin-right: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.formats legend { font-weight: 650; padding: 0; margin-bottom: 6px; }
+.format-card { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; cursor: pointer; }
+.format-card:has(input:checked) { border-color: var(--accent); background: var(--surface-2); }
+.format-card:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+.format-card input { margin-top: 3px; }
+.format-card b { display: block; }
+.format-card small { display: block; color: var(--text-2); font-size: 12px; line-height: 1.35; }
+.form-row { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; align-items: center; }
+.form-row > label { color: var(--text-2); }
+.form-row select, .form-row input[type="text"] { width: 100%; }
+.name-field { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.name-field input { flex: 1 1 auto; min-width: 0; }
+.name-field span { color: var(--text-2); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+#exportInfo { margin-top: 6px; padding-left: 120px; }
+#exportError:empty { display: none; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+@media (max-width: 640px) {
+  .dialog { padding: 14px; }
+  .form-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  #exportInfo { padding-left: 0; }
+}

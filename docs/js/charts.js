@@ -256,6 +256,58 @@
     if (opts.yLabel) svg.append("text").attr("x", m.left - 36).attr("y", 12).attr("fill", t.muted).text(opts.yLabel);
   }
 
+  // ---------------------------------------------------------------- UpSet plot (objects shared between sets)
+  // names: [set names], data: result of core.objectIntersections. Shows at most opts.maxColumns combinations.
+  function upset(el, names, data, opts) {
+    clear(el);
+    opts = opts || {};
+    var t = theme(), n = names.length;
+    if (n < 2 || data.combos.length === 0) return emptyState(el, "Select at least two cluster sets.");
+    var combos = data.combos.slice(0, opts.maxColumns || 40);
+    var W = chartWidth(el), small = narrow(W);
+    var labelChars = small ? 12 : 24, labelW = Math.min(small ? 96 : 190, d3.max(names, function (s) { return textWidth(clip(s, labelChars)); }) + 12);
+    var sizeW = small ? 54 : 120, colW = small ? 22 : 28, rowH = 26, barH = small ? 120 : 170, top = 26;
+    var gridX = labelW + sizeW + 18, width = Math.max(W, gridX + combos.length * colW + 12), height = top + barH + 14 + n * rowH + 30;
+    var svg = svgRoot(el, width, height, opts.label);
+    var y = d3.scaleLinear().domain([0, d3.max(combos, function (c) { return c.count; })]).nice(4).range([top + barH, top]);
+    var xs = d3.scaleLinear().domain([0, d3.max(data.sizes)]).range([0, sizeW]);
+    var rowY = function (i) { return top + barH + 14 + i * rowH + rowH / 2; };
+    y.ticks(4).filter(function (v) { return v === Math.floor(v); }).forEach(function (tick) {
+      svg.append("line").attr("x1", gridX).attr("x2", gridX + combos.length * colW).attr("y1", y(tick)).attr("y2", y(tick)).attr("stroke", t.grid);
+      svg.append("text").attr("x", gridX - 6).attr("y", y(tick) + 4).attr("text-anchor", "end").attr("fill", t.muted).attr("font-size", 11).text(tick);
+    });
+    svg.append("text").attr("x", small ? 4 : gridX).attr("y", 12).attr("fill", t.muted).text("Objects found in exactly these sets");
+    // set rows: name, size bar, zebra stripe
+    names.forEach(function (name, i) {
+      if (i % 2 === 0) svg.append("rect").attr("x", 0).attr("y", rowY(i) - rowH / 2).attr("width", width).attr("height", rowH).attr("fill", t.grid).attr("fill-opacity", 0.35);
+      svg.append("text").attr("x", labelW - 6).attr("y", rowY(i) + 4).attr("text-anchor", "end").attr("fill", t.text)
+        .text(clip(name, labelChars)).append("title").text(name);
+      var bar = svg.append("path").attr("d", hBarPath(labelW, rowY(i) - 7, Math.max(1, xs(data.sizes[i])), 14, 3)).attr("fill", t.muted);
+      hover(bar, function () { return [name, [["Objects", data.sizes[i].toLocaleString()]]]; });
+      if (!small) svg.append("text").attr("x", labelW + xs(data.sizes[i]) + 5).attr("y", rowY(i) + 4).attr("fill", t.muted).attr("font-size", 11).text(data.sizes[i].toLocaleString());
+    });
+    svg.append("text").attr("x", labelW).attr("y", rowY(n - 1) + rowH / 2 + 16).attr("fill", t.muted).attr("font-size", 11).text("Set size");
+    // one column per combination
+    var cols = svg.append("g").selectAll("g").data(combos).enter().append("g")
+      .attr("transform", function (d, k) { return "translate(" + (gridX + k * colW) + ",0)"; });
+    cols.append("rect").attr("x", 0).attr("y", top).attr("width", colW).attr("height", height - top - 30).attr("fill", "transparent");
+    cols.append("path").attr("d", function (d) { return vBarPath(3, y(0), colW - 6, Math.max(1, y(0) - y(d.count)), 3); }).attr("fill", t.series[0]);
+    cols.append("text").attr("x", colW / 2).attr("y", function (d) { return y(d.count) - 4; }).attr("text-anchor", "middle")
+      .attr("fill", t.muted).attr("font-size", small ? 9 : 11).text(function (d) { return d.count.toLocaleString(); });
+    cols.each(function (d) {
+      var g = d3.select(this), on = [];
+      d.members.forEach(function (m, i) { if (m) on.push(i); });
+      if (on.length > 1) g.append("line").attr("x1", colW / 2).attr("x2", colW / 2).attr("y1", rowY(on[0])).attr("y2", rowY(on[on.length - 1])).attr("stroke", t.text).attr("stroke-width", 2);
+      d.members.forEach(function (m, i) {
+        g.append("circle").attr("cx", colW / 2).attr("cy", rowY(i)).attr("r", small ? 5 : 6).attr("fill", m ? t.text : t.grid);
+      });
+    });
+    hover(cols, function (d) {
+      var inSets = names.filter(function (name, i) { return d.members[i]; });
+      return [d.count.toLocaleString() + " object" + (d.count === 1 ? "" : "s"), [[d.degree === n ? "In all sets" : "Only in", inSets.join(", ")]]];
+    });
+  }
+
   // ---------------------------------------------------------------- horizontal bars (pairwise similarities)
   // items: [{ label, value }]
   function bars(el, items, opts) {
@@ -654,46 +706,155 @@
     document.body.removeChild(a);
   }
 
-  function serialize(svg) {
-    var clone = svg.cloneNode(true), t = theme();
-    var bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    bg.setAttribute("width", "100%");
-    bg.setAttribute("height", "100%");
-    bg.setAttribute("fill", t.surface);
-    clone.insertBefore(bg, clone.firstChild);
-    return new XMLSerializer().serializeToString(clone);
+  var EXPORT_FORMATS = {
+    png: { mime: "image/png", ext: "png", transparent: true },
+    svg: { mime: "image/svg+xml", ext: "svg", transparent: true, vector: true },
+    pdf: { mime: "application/pdf", ext: "pdf", transparent: false },
+    jpeg: { mime: "image/jpeg", ext: "jpg", transparent: false },
+    webp: { mime: "image/webp", ext: "webp", transparent: true }
+  };
+  var TITLE_BAND = 34; // height in px added above the plot for its title
+
+  // The plot inside a chart container: { kind: "svg" | "canvas", node, width, height } in CSS pixels, or null.
+  function exportSource(el) {
+    var svg = el.querySelector("svg");
+    if (svg) return { kind: "svg", node: svg, width: +svg.getAttribute("width"), height: +svg.getAttribute("height") };
+    var canvas = el.querySelector("canvas");
+    if (canvas) return { kind: "canvas", node: canvas, width: parseFloat(canvas.style.width) || canvas.width, height: parseFloat(canvas.style.height) || canvas.height };
+    return null;
   }
 
-  function exportSvg(el, filename) {
-    var svg = el.querySelector("svg");
-    if (!svg) return false;
-    var blob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + serialize(svg)], { type: "image/svg+xml" });
+  function backgroundColor(choice) {
+    return choice === "transparent" ? null : choice === "white" ? "#ffffff" : theme().surface;
+  }
+
+  // Standalone SVG text of a plot, with an optional title band and background.
+  function svgMarkup(source, opts) {
+    var t = theme(), NS = "http://www.w3.org/2000/svg", band = opts.title ? TITLE_BAND : 0;
+    var w = source.width, h = source.height + band;
+    var root = document.createElementNS(NS, "svg");
+    root.setAttribute("xmlns", NS);
+    root.setAttribute("width", w);
+    root.setAttribute("height", h);
+    root.setAttribute("viewBox", "0 0 " + w + " " + h);
+    root.setAttribute("font-family", FONT);
+    root.setAttribute("font-size", "12");
+    var bg = backgroundColor(opts.background);
+    if (bg) {
+      var rect = document.createElementNS(NS, "rect");
+      rect.setAttribute("width", w);
+      rect.setAttribute("height", h);
+      rect.setAttribute("fill", bg);
+      root.appendChild(rect);
+    }
+    if (opts.title) {
+      var text = document.createElementNS(NS, "text");
+      text.setAttribute("x", 8);
+      text.setAttribute("y", 22);
+      text.setAttribute("font-size", "15");
+      text.setAttribute("font-weight", "600");
+      text.setAttribute("fill", t.text);
+      text.textContent = opts.title;
+      root.appendChild(text);
+    }
+    var g = document.createElementNS(NS, "g");
+    g.setAttribute("transform", "translate(0," + band + ")");
+    Array.prototype.forEach.call(source.node.childNodes, function (child) { g.appendChild(child.cloneNode(true)); });
+    root.appendChild(g);
+    return new XMLSerializer().serializeToString(root);
+  }
+
+  // A one-page PDF that shows a JPEG image at the given size in points.
+  function pdfFromJpeg(jpeg, pxW, pxH, ptW, ptH) {
+    var enc = new TextEncoder(), parts = [], offsets = [], length = 0;
+    function push(x) { var bytes = typeof x === "string" ? enc.encode(x) : x; parts.push(bytes); length += bytes.length; }
+    function object(n, write) { offsets[n] = length; push(n + " 0 obj\n"); write(); push("\nendobj\n"); }
+    var content = "q " + ptW.toFixed(2) + " 0 0 " + ptH.toFixed(2) + " 0 0 cm /Im0 Do Q";
+    push("%PDF-1.4\n");
+    object(1, function () { push("<< /Type /Catalog /Pages 2 0 R >>"); });
+    object(2, function () { push("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"); });
+    object(3, function () {
+      push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + ptW.toFixed(2) + " " + ptH.toFixed(2) + "] " +
+        "/Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>");
+    });
+    object(4, function () {
+      push("<< /Type /XObject /Subtype /Image /Width " + pxW + " /Height " + pxH + " /ColorSpace /DeviceRGB /BitsPerComponent 8 " +
+        "/Filter /DCTDecode /Length " + jpeg.length + " >>\nstream\n");
+      push(jpeg);
+      push("\nendstream");
+    });
+    object(5, function () { push("<< /Length " + content.length + " >>\nstream\n" + content + "\nendstream"); });
+    var xref = length, table = "xref\n0 6\n0000000000 65535 f \n";
+    for (var n = 1; n <= 5; n++) table += ("0000000000" + offsets[n]).slice(-10) + " 00000 n \n";
+    push(table + "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n");
+    return new Blob(parts, { type: "application/pdf" });
+  }
+
+  function saveBlob(blob, filename) {
     var url = URL.createObjectURL(blob);
     download(url, filename);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-    return true;
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
   }
 
-  function exportPng(el, filename, scale) {
-    var svg = el.querySelector("svg");
-    if (!svg) return false;
-    scale = scale || 3;
-    var w = +svg.getAttribute("width"), h = +svg.getAttribute("height"), img = new Image();
-    img.onload = function () {
-      var canvas = document.createElement("canvas");
-      canvas.width = w * scale;
-      canvas.height = h * scale;
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-      download(canvas.toDataURL("image/png"), filename);
-    };
-    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(serialize(svg));
-    return true;
+  // Draws the plot on a new canvas at `scale` times its on-screen size; calls done(canvas).
+  function rasterize(source, opts, done, fail) {
+    var band = opts.title ? TITLE_BAND : 0, w = source.width, h = source.height + band, scale = opts.scale || 1;
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    var ctx = canvas.getContext("2d");
+    if (source.kind === "svg") {
+      var img = new Image();
+      img.onload = function () { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); done(canvas); };
+      img.onerror = function () { fail("The browser could not draw the plot as an image."); };
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgMarkup(source, opts));
+      return;
+    }
+    var bg = backgroundColor(opts.background);
+    if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    if (opts.title) {
+      ctx.fillStyle = theme().text;
+      ctx.font = "600 " + 15 * scale + "px " + FONT;
+      ctx.fillText(opts.title, 8 * scale, 22 * scale);
+    }
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(source.node, 0, band * scale, w * scale, source.height * scale);
+    done(canvas);
+  }
+
+  // opts: { format, scale, background: "theme" | "white" | "transparent", title, filename (no extension) }
+  // done(error) is called when the download has started or failed.
+  function exportImage(el, opts, done) {
+    done = done || function () {};
+    var source = exportSource(el), format = EXPORT_FORMATS[opts.format];
+    if (!source) return done("There is no plot to export.");
+    if (!format) return done("Unknown format.");
+    opts = Object.assign({}, opts);
+    if (!format.transparent && opts.background === "transparent") opts.background = "white";
+    var filename = opts.filename + "." + format.ext;
+    if (format.vector) {
+      if (source.kind !== "svg") return done("This plot is drawn as pixels and has no vector version.");
+      saveBlob(new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + svgMarkup(source, opts)], { type: format.mime }), filename);
+      return done(null);
+    }
+    rasterize(source, opts, function (canvas) {
+      var mime = opts.format === "pdf" ? "image/jpeg" : format.mime;
+      canvas.toBlob(function (blob) {
+        if (!blob || (opts.format === "webp" && blob.type !== "image/webp")) return done("This browser cannot write " + opts.format.toUpperCase() + " images.");
+        if (opts.format !== "pdf") { saveBlob(blob, filename); return done(null); }
+        blob.arrayBuffer().then(function (buffer) {
+          var band = opts.title ? TITLE_BAND : 0;
+          saveBlob(pdfFromJpeg(new Uint8Array(buffer), canvas.width, canvas.height, source.width * 0.75, (source.height + band) * 0.75), filename);
+          done(null);
+        });
+      }, mime, 0.95);
+    }, done);
   }
 
   VICTOR.charts = {
     theme: theme, sequential: sequential, readableOn: readableOn, fmt: fmt,
-    columns: columns, histogram: histogram, bars: bars, heatmap: heatmap, sankey: sankey,
+    columns: columns, histogram: histogram, bars: bars, upset: upset, heatmap: heatmap, sankey: sankey,
     network: network, chord: chord, graph: graph,
-    exportSvg: exportSvg, exportPng: exportPng, download: download
+    exportImage: exportImage, exportSource: exportSource, EXPORT_FORMATS: EXPORT_FORMATS, TITLE_BAND: TITLE_BAND, download: download
   };
 })(window);
