@@ -645,7 +645,7 @@
   function graph(el, net, quality, clusters) {
     clear(el, "graph");
     var t = theme(), N = net.nodes.length;
-    if (N > 3000) { emptyState(el, "The network has " + N + " nodes; the drawing is skipped above 3000 nodes. The table and histogram still cover all of it."); return []; }
+    if (N > 3000) { emptyState(el, "The network has " + N + " nodes; the drawing is skipped above 3000 nodes. The table and histogram still cover all of it. Use Open in NORMA below to view the network."); return []; }
     // the 8 largest clusters get a colour, the rest share a neutral one
     var ranked = quality.rows.map(function (r, i) { return { i: i, size: r.inNetwork }; })
       .filter(function (r) { return r.size > 0; }).sort(function (a, b) { return b.size - a.size; });

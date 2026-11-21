@@ -976,8 +976,10 @@
   }
 
   function setNormaStatus(text, bad) {
-    $("normaStatus").textContent = text;
-    $("normaStatus").className = "hint" + (bad ? " status-bad" : "");
+    ["normaStatus", "normaStatusInline"].forEach(function (id) {
+      $(id).textContent = text;
+      $(id).className = "hint" + (bad ? " status-bad" : "");
+    });
   }
 
   function openInNorma() {
@@ -1206,6 +1208,7 @@
     $("homeNetworkExample").addEventListener("click", function () { $("exampleNetwork").click(); showTab("quality"); });
     $("compareNetworkGo").addEventListener("click", function () { showTab("quality"); });
     $("normaOpen").addEventListener("click", openInNorma);
+    $("normaOpenInline").addEventListener("click", openInNorma);
     $("normaDownload").addEventListener("click", downloadNormaFiles);
     $("homeHelp").addEventListener("click", function () { showTab("help"); });
     $("homeExample").addEventListener("click", function () { loadExample(EXAMPLES[0].files, EXAMPLES[0]); showTab("files"); });

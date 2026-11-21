@@ -395,3 +395,8 @@ td.best { font-weight: 700; }
 .norma-btn b { font-weight: 750; letter-spacing: 0.04em; background: linear-gradient(90deg, #2dd4bf, #fbbf24); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .norma-btn:hover { border-color: #14b8a6; box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.35); }
 .norma-btn:disabled { box-shadow: none; }
+
+.norma-note { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; border-radius: 9px; background: var(--surface-2); }
+.norma-note p { flex: 1 1 220px; font-size: 13px; color: var(--text-2); }
+.norma-btn.compact { padding: 6px 12px; font-size: 14px; }
+#normaStatusInline:empty { display: none; }

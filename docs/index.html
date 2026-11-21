@@ -9,8 +9,8 @@
 <title>VICTOR: comparing cluster sets</title>
 <meta name="description" content="VICTOR is a visual analytics web application for comparing cluster sets. It runs entirely in your browser.">
 <link rel="icon" href="favicon.ico">
-<link rel="stylesheet" href="css/victor.css?v=13">
-<script src="js/theme.js?v=13"></script>
+<link rel="stylesheet" href="css/victor.css?v=14">
+<script src="js/theme.js?v=14"></script>
 </head>
 <body>
 
@@ -409,6 +409,11 @@ cluster3	F06,F11</pre></div>
               <header><h3>Network coloured by cluster</h3><p>The eight largest clusters are coloured</p><button class="btn small export-btn" type="button" data-chart="chartGraph" data-name="victor_network" data-title="Network coloured by cluster">Export</button></header>
               <div class="chart" id="chartGraph"></div>
               <div class="legend" id="graphLegend"></div>
+              <div class="norma-note">
+                <p>This is a quick preview. For a better view of the clusters on the network (pie-chart nodes, group outlines, layouts, 3D), open it in NORMA.</p>
+                <button class="btn norma-btn compact" id="normaOpenInline" type="button"><img src="img/norma-icon.svg" alt="" width="22" height="22"><span>Open in <b>NORMA</b></span></button>
+              </div>
+              <p class="hint" id="normaStatusInline" role="status"></p>
             </div>
             <div class="card">
               <header><h3>Conductance of the clusters</h3><p>Closer to 0 means better separated</p><button class="btn small export-btn" type="button" data-chart="chartConductance" data-name="victor_conductance" data-title="Conductance of the clusters">Export</button></header>
@@ -569,10 +574,10 @@ N2	N11	0.3</pre>
 
 <footer>VICTOR runs entirely in your browser. Open-source under the AGPL-3.0 licence.</footer>
 
-<script src="lib/d3.v5.min.js?v=13"></script>
-<script src="js/core.js?v=13"></script>
-<script src="js/charts.js?v=13"></script>
-<script src="js/examples.js?v=13"></script>
-<script src="js/app.js?v=13"></script>
+<script src="lib/d3.v5.min.js?v=14"></script>
+<script src="js/core.js?v=14"></script>
+<script src="js/charts.js?v=14"></script>
+<script src="js/examples.js?v=14"></script>
+<script src="js/app.js?v=14"></script>
 </body>
 </html>
